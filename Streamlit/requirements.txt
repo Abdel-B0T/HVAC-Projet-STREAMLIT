@@ -1,0 +1,7 @@
+streamlit
+pandas
+numpy
+paho-mqtt
+mysql-connector-python
+firebase-admin
+plotly
