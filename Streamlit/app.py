@@ -53,8 +53,8 @@ def card(title, value, color):
 MQTT_BROKER = "20.251.206.33"
 MQTT_PORT = 1883
 
-TOPIC_LT_DATA = "hvac/localtech/data"
-TOPIC_LT_CMD  = "hvac/localtech/cmd"
+TOPIC_LT_DATA = "hvac/a02/localtech/data"
+TOPIC_LT_CMD  = "hvac/a02/localtech/cmd"
 TOPIC_SALLE_DATA = "hvac/salle/data"
 
 # Variables pour stocker la dernière donnée reçue
