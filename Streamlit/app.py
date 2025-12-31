@@ -53,7 +53,7 @@ page = st.sidebar.selectbox(
 )
 
 # Paramètres MariaDB (mets les tiens)
-DB_HOST = "20.19.176.195"
+DB_HOST = "127.0.0.1"
 DB_USER = "ec"
 DB_PASS = "ec"
 DB_NAME = "IOT_DB"
