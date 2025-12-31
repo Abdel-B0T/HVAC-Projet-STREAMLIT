@@ -59,32 +59,21 @@ DB_PASS = "ec"
 DB_NAME = "IOT_DB"
 
 # Je me connecte à MariaDB et je lis la table
-def get_mariadb_data(limit=200):
+def get_mariadb_data():
     try:
         conn = mysql.connector.connect(
-            host=DB_HOST,
-            user=DB_USER,
-            password=DB_PASS,
-            database=DB_NAME
+            host="127.0.0.1",
+            user="ec",
+            password="ec",
+            database="IOT_DB",
+            port=3306
         )
         cursor = conn.cursor(dictionary=True)
-
-        cursor.execute(f"SELECT * FROM mesures_hvac ORDER BY id DESC LIMIT {int(limit)}")
+        cursor.execute("SELECT * FROM mesures_hvac ORDER BY id DESC LIMIT 200")
         rows = cursor.fetchall()
-
         cursor.close()
         conn.close()
-
-        if not rows:
-            return pd.DataFrame()
-
-        df = pd.DataFrame(rows)
-
-        # Je remets l'ordre chronologique pour les graphes
-        df = df.sort_values("id")
-
-        return df
-
+        return pd.DataFrame(rows)
     except Exception as e:
         st.sidebar.error(f"Erreur MariaDB : {e}")
         return pd.DataFrame()
