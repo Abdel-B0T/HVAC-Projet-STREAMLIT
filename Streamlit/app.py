@@ -1,8 +1,7 @@
 import streamlit as st
 import pandas as pd
-import mysql.connector
 import plotly.express as px
-from datetime import datetime
+import requests
 
 # Configuration générale de la page
 st.set_page_config(
@@ -52,102 +51,117 @@ page = st.sidebar.selectbox(
     ["Vue générale", "Commandes", "Historique"]
 )
 
-# Paramètres MariaDB (mets les tiens)
-DB_HOST = "127.0.0.1"
-DB_USER = "ec"
-DB_PASS = "ec"
-DB_NAME = "IOT_DB"
+# -----------------------------
+# API Node-RED (obligatoire)
+# -----------------------------
+API_LATEST = st.secrets.get("API_LATEST", "").strip()
+API_HISTORY = st.secrets.get("API_HISTORY", "").strip()  # optionnel
 
-# Je me connecte à MariaDB et je lis la table
-def get_mariadb_data():
-    try:
-        conn = mysql.connector.connect(
-            host="127.0.0.1",
-            user="ec",
-            password="ec",
-            database="IOT_DB",
-            port=3306
-        )
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM mesures_hvac ORDER BY id DESC LIMIT 200")
-        rows = cursor.fetchall()
-        cursor.close()
-        conn.close()
-        return pd.DataFrame(rows)
-    except Exception as e:
-        st.sidebar.error(f"Erreur MariaDB : {e}")
+if not API_LATEST:
+    st.error("Secret manquant: API_LATEST. Va dans Streamlit Cloud > Settings > Secrets.")
+    st.stop()
+
+@st.cache_data(ttl=2)
+def get_latest():
+    r = requests.get(API_LATEST, timeout=5)
+    r.raise_for_status()
+    return r.json()
+
+@st.cache_data(ttl=5)
+def get_history():
+    if not API_HISTORY:
         return pd.DataFrame()
-
-# Je récupère les données une fois
-df = get_mariadb_data(limit=300)
+    r = requests.get(API_HISTORY, timeout=8)
+    r.raise_for_status()
+    data = r.json()
+    return pd.DataFrame(data)
 
 # Option pour rafraîchir (simple)
 st.sidebar.write("Actualisation")
 refresh = st.sidebar.button("Rafraîchir les données")
-
 if refresh:
+    st.cache_data.clear()
     st.rerun()
 
+# -----------------------------
 # Page 1 : Vue générale
+# -----------------------------
 if page == "Vue générale":
     st.subheader("Vue générale - Salle technique")
 
-    if df.empty:
-        st.error("Aucune donnée dans mesures_hvac. Vérifie que Node-RED insère bien dans la table.")
+    try:
+        last = get_latest()
+    except Exception as e:
+        st.error(f"Erreur API (latest) : {e}")
+        st.stop()
+
+    if not last:
+        st.error("Aucune donnée reçue depuis l'API.")
+        st.stop()
+
+    temperature_lt = last.get("temperature_lt", "—")
+    humidite_lt    = last.get("humidite_lt", "—")
+    gaz_value      = last.get("gaz", "—")
+    motor_speed    = last.get("motor_speed", "—")
+    alarme         = last.get("alarme", "—")
+    date_mesure    = last.get("date", "—")
+
+    st.caption(f"Dernière mesure : {date_mesure}")
+
+    # Cartes
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        card("Température (°C)", f"{temperature_lt}", "#2E86C1")
+        card("Humidité (%)", f"{humidite_lt}", "#239B56")
+
+    with col2:
+        # Couleur gaz (tu peux ajuster le seuil)
+        try:
+            gaz_int = int(float(gaz_value))
+        except Exception:
+            gaz_int = None
+
+        couleur_gaz = "#C0392B" if (gaz_int is not None and gaz_int >= 3000) else "#D68910"
+        card("Gaz MQ2 (analog)", f"{gaz_value}", couleur_gaz)
+
+        # Alarme
+        try:
+            alarme_int = int(float(alarme))
+        except Exception:
+            alarme_int = 0
+
+        alarme_txt = "ACTIF" if alarme_int == 1 else "INACTIF"
+        couleur_alarme = "#C0392B" if alarme_txt == "ACTIF" else "#5D6D7E"
+        card("Alarme", alarme_txt, couleur_alarme)
+
+    with col3:
+        card("Vitesse moteur (0-255)", f"{motor_speed}", "#5D6D7E")
+
+    # Graphiques si API_HISTORY est fourni
+    df = get_history()
+    if not df.empty and "date" in df.columns:
+        g1, g2 = st.columns(2)
+
+        with g1:
+            if "temperature_lt" in df.columns:
+                fig_t = px.line(df, x="date", y="temperature_lt", title="Température")
+                st.plotly_chart(fig_t, use_container_width=True)
+
+        with g2:
+            if "humidite_lt" in df.columns:
+                fig_h = px.line(df, x="date", y="humidite_lt", title="Humidité")
+                st.plotly_chart(fig_h, use_container_width=True)
     else:
-        # Je prends la dernière ligne (la plus récente)
-        last = df.iloc[-1]
+        st.info("Pour afficher les graphes, ajoute une API d'historique (API_HISTORY) côté Node-RED.")
 
-        temperature_lt = last.get("temperature_lt", None)
-        humidite_lt    = last.get("humidite_lt", None)
-        gaz_value      = last.get("gaz", None)
-        motor_speed    = last.get("motor_speed", None)
-        alarme         = last.get("alarme", None)
-        date_mesure    = last.get("date", None)
-
-        # Affichage date si elle existe
-        if date_mesure is not None:
-            st.caption(f"Dernière mesure : {date_mesure}")
-
-        # Cartes
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            card("Température (°C)", f"{temperature_lt}", "#2E86C1")
-            card("Humidité (%)", f"{humidite_lt}", "#239B56")
-
-        with col2:
-            # Couleur gaz
-            couleur_gaz = "#C0392B" if (gaz_value is not None and int(gaz_value) >= 3000) else "#D68910"
-            card("Gaz MQ2 (analog)", f"{gaz_value}", couleur_gaz)
-
-            # Alarme
-            alarme_txt = "ACTIF" if (alarme is not None and int(alarme) == 1) else "INACTIF"
-            couleur_alarme = "#C0392B" if alarme_txt == "ACTIF" else "#5D6D7E"
-            card("Alarme", alarme_txt, couleur_alarme)
-
-        with col3:
-            card("Vitesse moteur (0-255)", f"{motor_speed}", "#5D6D7E")
-
-        # Petit graphique rapide température/hum
-        if "date" in df.columns:
-            g1, g2 = st.columns(2)
-
-            with g1:
-                if "temperature_lt" in df.columns:
-                    fig_t = px.line(df, x="date", y="temperature_lt", title="Température")
-                    st.plotly_chart(fig_t, use_container_width=True)
-
-            with g2:
-                if "humidite_lt" in df.columns:
-                    fig_h = px.line(df, x="date", y="humidite_lt", title="Humidité")
-                    st.plotly_chart(fig_h, use_container_width=True)
-
-# Page 2 : Commandes (on ne fait pas MQTT ici, juste une page UI)
+# -----------------------------
+# Page 2 : Commandes (UI seulement pour l'instant)
+# -----------------------------
 elif page == "Commandes":
     st.subheader("Commandes - Salle technique")
 
-    st.info("Ici tu peux mettre des commandes plus tard. Pour l’instant on affiche juste l’interface.")
+    st.info("Ici tu peux mettre les commandes plus tard. Pour l’instant on affiche juste l’interface.")
 
     vitesse = st.slider("Vitesse du moteur (0 à 255)", 0, 255, 120)
     mute = st.checkbox("Mute alarme", value=False)
@@ -155,14 +169,17 @@ elif page == "Commandes":
     st.write("Valeurs choisies :")
     st.write({"target_speed": vitesse, "mute": 1 if mute else 0})
 
-    st.warning("Si tu veux que Streamlit commande l’ESP32, je te donne le code MQTT direct dans Streamlit.")
+    st.warning("Étape suivante : on enverra ces valeurs à Node-RED (POST) -> MQTT -> ESP32.")
 
+# -----------------------------
 # Page 3 : Historique
+# -----------------------------
 elif page == "Historique":
     st.subheader("Historique - mesures_hvac")
 
+    df = get_history()
     if df.empty:
-        st.error("Aucune donnée trouvée.")
+        st.error("Aucun historique (API_HISTORY pas configurée ou pas de données).")
     else:
         st.dataframe(df, use_container_width=True)
 
