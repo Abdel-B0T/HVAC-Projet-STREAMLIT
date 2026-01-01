@@ -4,49 +4,62 @@ import plotly.express as px
 import plotly.graph_objects as go
 import requests
 
-# Configuration générale de la page
-st.set_page_config(
-    page_title="HVAC - Dashboard A_02 (Salle Technique)",
-    layout="wide"
-)
+st.set_page_config(page_title="HVAC - Salle Technique", layout="wide")
 
-# Style CSS pour le bandeau du haut
+# -----------------------------
+# CSS
+# -----------------------------
 st.markdown("""
-    <style>
-        .header {
-            background-color: #1F1F1F;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        .header h1 {
-            color: white;
-            text-align: center;
-            font-size: 26px;
-            margin: 0;
-        }
-    </style>
+<style>
+.header {
+    background-color: #1F1F1F;
+    padding: 16px;
+    border-radius: 14px;
+    margin-bottom: 18px;
+}
+.header h1 {
+    color: white;
+    text-align: center;
+    font-size: 26px;
+    margin: 0;
+}
+.small-note {
+    color: #666;
+    font-size: 13px;
+    margin-top: -6px;
+}
+.kpi-card {
+    padding: 14px;
+    border-radius: 14px;
+    text-align: center;
+    margin-bottom: 10px;
+}
+.kpi-card h4 {
+    color: white;
+    margin: 0 0 6px 0;
+    font-weight: 600;
+}
+.kpi-card h2 {
+    color: white;
+    margin: 0;
+    font-size: 36px;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# Bandeau en haut
-st.markdown(
-    "<div class='header'><h1>Supervision HVAC – Salle Technique</h1></div>",
-    unsafe_allow_html=True
-)
+st.markdown("<div class='header'><h1>Supervision HVAC – Salle Technique</h1></div>", unsafe_allow_html=True)
 
-# Petite carte visuelle pour afficher une valeur
-def card(title, value, color):
+def kpi(title: str, value: str, color: str):
     st.markdown(
         f"""
-        <div style='background-color:{color}; padding: 15px; border-radius: 10px; text-align:center; margin-bottom:10px;'>
-            <h4 style='color:white; margin-bottom:5px;'>{title}</h4>
-            <h2 style='color:white; margin:0;'>{value}</h2>
+        <div class="kpi-card" style="background-color:{color};">
+            <h4>{title}</h4>
+            <h2>{value}</h2>
         </div>
         """,
         unsafe_allow_html=True
     )
 
-# Gauge Plotly (gaz + vitesse moteur)
 def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
     try:
         val = float(value)
@@ -65,22 +78,26 @@ def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
         value=val,
         title={"text": title},
         number={"suffix": f" {suffix}"},
-        gauge={
-            "axis": {"range": [vmin, vmax]},
-            "steps": steps
-        }
+        gauge={"axis": {"range": [vmin, vmax]}, "steps": steps}
     ))
+    fig.update_layout(margin=dict(l=10, r=10, t=45, b=10), height=280)
     st.plotly_chart(fig, use_container_width=True)
 
-# Menu à gauche
-page = st.sidebar.selectbox(
-    "Choisir une page",
-    ["Vue générale", "Commandes", "Historique"]
-)
+# -----------------------------
+# Sidebar
+# -----------------------------
+page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique"])
 
-# Secrets Streamlit Cloud
+st.sidebar.write("Actualisation")
+if st.sidebar.button("Rafraîchir les données"):
+    st.cache_data.clear()
+    st.rerun()
+
+# -----------------------------
+# API Secrets
+# -----------------------------
 API_LATEST = st.secrets.get("API_LATEST", "").strip()
-API_HISTORY = st.secrets.get("API_HISTORY", "").strip()  # optionnel mais recommandé
+API_HISTORY = st.secrets.get("API_HISTORY", "").strip()
 
 if not API_LATEST:
     st.error("Secret manquant: API_LATEST. Va dans Streamlit Cloud > Settings > Secrets.")
@@ -88,7 +105,7 @@ if not API_LATEST:
 
 @st.cache_data(ttl=2)
 def get_latest():
-    r = requests.get(API_LATEST, timeout=5)
+    r = requests.get(API_LATEST, timeout=6)
     r.raise_for_status()
     return r.json()
 
@@ -96,134 +113,157 @@ def get_latest():
 def get_history():
     if not API_HISTORY:
         return pd.DataFrame()
-    r = requests.get(API_HISTORY, timeout=8)
+    r = requests.get(API_HISTORY, timeout=10)
     r.raise_for_status()
-    data = r.json()
-    return pd.DataFrame(data)
+    return pd.DataFrame(r.json())
 
-# Actualisation
-st.sidebar.write("Actualisation")
-refresh = st.sidebar.button("Rafraîchir les données")
-if refresh:
-    st.cache_data.clear()
-    st.rerun()
+def fmt_date(dt_value):
+    if pd.isna(dt_value) or dt_value is None:
+        return "—"
+    try:
+        ts = pd.to_datetime(dt_value, utc=True, errors="coerce")
+        if pd.isna(ts):
+            return str(dt_value)
+        # format lisible
+        return ts.tz_convert("Europe/Brussels").strftime("%d/%m/%Y %H:%M:%S")
+    except Exception:
+        return str(dt_value)
 
-# Page 1 : Vue générale
+def safe_int(x, default=0):
+    try:
+        return int(float(x))
+    except Exception:
+        return default
+
+# -----------------------------
+# Data
+# -----------------------------
+try:
+    last = get_latest()
+except Exception as e:
+    st.error(f"Erreur API (latest) : {e}")
+    st.stop()
+
+df = get_history()
+if not df.empty and "date" in df.columns:
+    df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce")
+    # pour affichage/axes plus propres (timezone BE)
+    df["date_local"] = df["date"].dt.tz_convert("Europe/Brussels")
+
+# Valeurs last
+temperature_lt = last.get("temperature_lt", "—")
+humidite_lt    = last.get("humidite_lt", "—")
+gaz_value      = last.get("gaz", "—")
+motor_speed    = last.get("motor_speed", "—")
+alarme_value   = last.get("alarme", "—")
+date_value     = last.get("date", None)
+
+alarme_int = safe_int(alarme_value, 0)
+alarme_txt = "ACTIF" if alarme_int == 1 else "INACTIF"
+
+# -----------------------------
+# Page: Vue générale
+# -----------------------------
 if page == "Vue générale":
     st.subheader("Vue générale - Salle technique")
+    st.markdown(f"<div class='small-note'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
 
-    try:
-        last = get_latest()
-    except Exception as e:
-        st.error(f"Erreur API (latest) : {e}")
-        st.stop()
-
-    if not last:
-        st.error("Aucune donnée reçue depuis l'API.")
-        st.stop()
-
-    temperature_lt = last.get("temperature_lt", "—")
-    humidite_lt    = last.get("humidite_lt", "—")
-    gaz_value      = last.get("gaz", "—")
-    motor_speed    = last.get("motor_speed", "—")
-    alarme         = last.get("alarme", "—")
-    date_mesure    = last.get("date", "—")
-
-    st.caption(f"Dernière mesure : {date_mesure}")
-
-    # Cartes rapides en haut
-    col1, col2, col3, col4 = st.columns(4)
-
-    with col1:
-        card("Température (°C)", f"{temperature_lt}", "#2E86C1")
-
-    with col2:
-        card("Humidité (%)", f"{humidite_lt}", "#239B56")
-
-    with col3:
-        try:
-            alarme_int = int(float(alarme))
-        except Exception:
-            alarme_int = 0
-        alarme_txt = "ACTIF" if alarme_int == 1 else "INACTIF"
-        couleur_alarme = "#C0392B" if alarme_txt == "ACTIF" else "#5D6D7E"
-        card("Alarme", alarme_txt, couleur_alarme)
-
-    with col4:
-        card("Date", f"{date_mesure}", "#5D6D7E")
-
-    st.markdown("### Graphes (Température / Humidité)")
-
-    df = get_history()
-    if not df.empty and "date" in df.columns:
-        df["date"] = pd.to_datetime(df["date"], errors="coerce")
-
-        g1, g2 = st.columns(2)
-        with g1:
-            if "temperature_lt" in df.columns:
-                fig_t = px.line(df, x="date", y="temperature_lt", title="Température")
-                st.plotly_chart(fig_t, use_container_width=True)
-            else:
-                st.info("Pas de colonne temperature_lt dans l'historique.")
-
-        with g2:
-            if "humidite_lt" in df.columns:
-                fig_h = px.line(df, x="date", y="humidite_lt", title="Humidité")
-                st.plotly_chart(fig_h, use_container_width=True)
-            else:
-                st.info("Pas de colonne humidite_lt dans l'historique.")
-    else:
-        st.info("Pour les graphes, configure API_HISTORY (voir Secrets Streamlit).")
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        kpi("Température (°C)", f"{temperature_lt}", "#2E86C1")
+    with c2:
+        kpi("Humidité (%)", f"{humidite_lt}", "#239B56")
+    with c3:
+        kpi("Alarme", alarme_txt, "#C0392B" if alarme_txt == "ACTIF" else "#5D6D7E")
+    with c4:
+        kpi("Vitesse (0-255)", f"{motor_speed}", "#5D6D7E")
 
     st.markdown("### Gauges (Gaz / Vitesse moteur)")
-    c1, c2 = st.columns(2)
-
-    with c1:
-        # Gaz MQ2 typiquement 0..4095 (ADC)
+    g1, g2 = st.columns(2)
+    with g1:
         gauge("Gaz (MQ2)", gaz_value, 0, 4095, suffix="ADC", seuil_rouge=3000)
-
-    with c2:
-        # Vitesse moteur 0..255
+    with g2:
         gauge("Vitesse moteur", motor_speed, 0, 255, suffix="/255", seuil_rouge=200)
 
-# Page 2 : Commandes (UI seulement)
+    st.markdown("### Graphes (Température / Humidité)")
+    if df.empty or "date_local" not in df.columns:
+        st.info("Pour les graphes, configure API_HISTORY (Secrets Streamlit).")
+    else:
+        p1, p2 = st.columns(2)
+        with p1:
+            if "temperature_lt" in df.columns:
+                fig_t = px.line(df, x="date_local", y="temperature_lt", title="Température")
+                st.plotly_chart(fig_t, use_container_width=True)
+            else:
+                st.info("Colonne temperature_lt manquante.")
+        with p2:
+            if "humidite_lt" in df.columns:
+                fig_h = px.line(df, x="date_local", y="humidite_lt", title="Humidité")
+                st.plotly_chart(fig_h, use_container_width=True)
+            else:
+                st.info("Colonne humidite_lt manquante.")
+
+# -----------------------------
+# Page: Commandes (UI)
+# -----------------------------
 elif page == "Commandes":
     st.subheader("Commandes - Salle technique")
-
-    st.info("Interface prête. Étape suivante : envoyer les commandes à Node-RED (POST) puis MQTT vers l'ESP32.")
+    st.info("Étape suivante : on envoie les commandes à Node-RED (POST) → MQTT → ESP32.")
 
     vitesse = st.slider("Vitesse du moteur (0 à 255)", 0, 255, 120)
     mute = st.checkbox("Mute alarme", value=False)
 
-    st.write("Valeurs choisies :")
     st.write({"target_speed": vitesse, "mute": 1 if mute else 0})
 
-# Page 3 : Historique
+# -----------------------------
+# Page: Historique
+# -----------------------------
 elif page == "Historique":
     st.subheader("Historique - mesures_hvac")
 
-    df = get_history()
     if df.empty:
         st.error("Aucun historique (API_HISTORY pas configurée ou pas de données).")
     else:
-        if "date" in df.columns:
-            df["date"] = pd.to_datetime(df["date"], errors="coerce")
+        # En haut: gauges + infos (meilleure visu)
+        top1, top2, top3, top4 = st.columns(4)
 
-        st.dataframe(df, use_container_width=True)
+        with top1:
+            kpi("Dernière température (°C)", f"{temperature_lt}", "#2E86C1")
+        with top2:
+            kpi("Dernière humidité (%)", f"{humidite_lt}", "#239B56")
+        with top3:
+            kpi("Alarme", alarme_txt, "#C0392B" if alarme_txt == "ACTIF" else "#5D6D7E")
+        with top4:
+            kpi("Dernière mesure", fmt_date(date_value), "#5D6D7E")
 
-        if "date" in df.columns and "gaz" in df.columns:
-            fig_gaz = px.line(df, x="date", y="gaz", title="Évolution Gaz MQ2")
+        st.markdown("### Gauges (sur la dernière mesure)")
+        gg1, gg2 = st.columns(2)
+        with gg1:
+            gauge("Gaz (MQ2)", gaz_value, 0, 4095, suffix="ADC", seuil_rouge=3000)
+        with gg2:
+            gauge("Vitesse moteur", motor_speed, 0, 255, suffix="/255", seuil_rouge=200)
+
+        st.markdown("### Graphes")
+        if "date_local" in df.columns and "gaz" in df.columns:
+            fig_gaz = px.line(df, x="date_local", y="gaz", title="Évolution Gaz MQ2")
             st.plotly_chart(fig_gaz, use_container_width=True)
 
-        if "date" in df.columns and "motor_speed" in df.columns:
-            fig_motor = px.line(df, x="date", y="motor_speed", title="Évolution vitesse moteur")
+        if "date_local" in df.columns and "motor_speed" in df.columns:
+            fig_motor = px.line(df, x="date_local", y="motor_speed", title="Évolution vitesse moteur")
             st.plotly_chart(fig_motor, use_container_width=True)
 
-        # Fix: pas de px.step sur certaines versions -> line + line_shape="hv"
-        if "date" in df.columns and "alarme" in df.columns:
-            fig_al = px.line(df, x="date", y="alarme", title="Historique alarme (0/1)")
+        if "date_local" in df.columns and "alarme" in df.columns:
+            fig_al = px.line(df, x="date_local", y="alarme", title="Historique alarme (0/1)")
             fig_al.update_traces(line_shape="hv")
             st.plotly_chart(fig_al, use_container_width=True)
+
+        st.markdown("### Tableau")
+        # Affichage plus propre de la date
+        df_show = df.copy()
+        if "date_local" in df_show.columns:
+            df_show["date_local"] = df_show["date_local"].dt.strftime("%d/%m/%Y %H:%M:%S")
+        st.dataframe(df_show[["id", "date_local", "temperature_lt", "humidite_lt", "gaz", "motor_speed", "alarme"]],
+                     use_container_width=True)
 
 # Pied de page
 st.markdown(
