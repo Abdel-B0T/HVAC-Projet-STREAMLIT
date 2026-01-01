@@ -83,10 +83,7 @@ def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
         gauge={"axis": {"range": [vmin, vmax]}, "steps": steps}
     ))
 
-    fig.update_layout(
-        margin=dict(l=20, r=20, t=80, b=20),
-        height=320
-    )
+    fig.update_layout(margin=dict(l=20, r=20, t=90, b=20), height=320)
     st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
@@ -96,17 +93,12 @@ page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", 
 
 refresh_seconds = st.sidebar.slider(
     "Temps de rafraîchissement (secondes)",
-    min_value=2,
-    max_value=10,
-    value=4,
-    step=1
+    min_value=2, max_value=15, value=5, step=1
 )
 
-# Auto-refresh UNIQUEMENT sur Vue générale
 if page == "Vue générale":
-    st_autorefresh(interval=refresh_seconds * 1000, key="auto_refresh_vue_generale")
+    st_autorefresh(interval=refresh_seconds * 1000, key="auto_refresh_vg")
 
-st.sidebar.write("Actualisation")
 if st.sidebar.button("Rafraîchir maintenant"):
     st.cache_data.clear()
     st.rerun()
@@ -120,19 +112,19 @@ if page == "Historique":
     )
 
 # -----------------------------
-# API Secrets
+# Secrets
 # -----------------------------
 API_LATEST = st.secrets.get("API_LATEST", "").strip()
 API_HISTORY = st.secrets.get("API_HISTORY", "").strip()
-API_CMD = st.secrets.get("API_CMD", "").strip()  # <-- AJOUT
+API_CMD = st.secrets.get("API_CMD", "").strip()
 
 if not API_LATEST:
-    st.error("Secret manquant: API_LATEST. Va dans Streamlit Cloud > Settings > Secrets.")
+    st.error("Secret manquant: API_LATEST (GET dernière mesure).")
     st.stop()
 
 @st.cache_data(ttl=2)
 def get_latest():
-    r = requests.get(API_LATEST, timeout=6)
+    r = requests.get(API_LATEST, timeout=8)
     r.raise_for_status()
     return r.json()
 
@@ -140,7 +132,7 @@ def get_latest():
 def get_history():
     if not API_HISTORY:
         return pd.DataFrame()
-    r = requests.get(API_HISTORY, timeout=10)
+    r = requests.get(API_HISTORY, timeout=12)
     r.raise_for_status()
     return pd.DataFrame(r.json())
 
@@ -199,7 +191,7 @@ if page == "Vue générale":
     with c4:
         kpi("Vitesse (0-255)", f"{motor_speed}", "#5D6D7E")
 
-    st.markdown("### Gauges")
+    st.markdown("### Gauges (dernière mesure)")
     g1, g2 = st.columns(2)
     with g1:
         gauge("Gaz (MQ2)", gaz_value, 0, 4095, suffix="ADC", seuil_rouge=3000)
@@ -213,37 +205,57 @@ if page == "Vue générale":
         p1, p2 = st.columns(2)
         with p1:
             if "temperature_lt" in df.columns:
-                fig_t = px.line(df, x="date_local", y="temperature_lt", title="Température")
-                st.plotly_chart(fig_t, use_container_width=True)
+                st.plotly_chart(px.line(df, x="date_local", y="temperature_lt", title="Température"), use_container_width=True)
         with p2:
             if "humidite_lt" in df.columns:
-                fig_h = px.line(df, x="date_local", y="humidite_lt", title="Humidité")
-                st.plotly_chart(fig_h, use_container_width=True)
+                st.plotly_chart(px.line(df, x="date_local", y="humidite_lt", title="Humidité"), use_container_width=True)
 
 # -----------------------------
-# Page: Commandes (ENVOI RÉEL)
+# Page: Commandes
 # -----------------------------
 elif page == "Commandes":
     st.subheader("Commandes - Salle technique")
     st.info("Streamlit → POST Node-RED → MQTT → ESP32")
 
+    if not API_CMD:
+        st.error("Secret manquant: API_CMD (POST commande vers Node-RED).")
+        st.stop()
+
     vitesse = st.slider("Vitesse du moteur (0 à 255)", 0, 255, 120)
     mute = st.checkbox("Mute alarme", value=False)
 
-    payload = {"target_speed": vitesse, "mute": 1 if mute else 0}
-    st.json(payload)
+    payload_send = {"target_speed": int(vitesse), "mute": 1 if mute else 0}
+    payload_stop = {"target_speed": 0, "mute": 1 if mute else 0}
 
-    if st.button("Envoyer la commande"):
-        if not API_CMD:
-            st.error("Secret manquant: API_CMD. Ajoute-le dans Streamlit Cloud > Settings > Secrets.")
-        else:
+    st.json(payload_send)
+
+    b1, b2 = st.columns(2)
+
+    with b1:
+        if st.button("Envoyer la commande", use_container_width=True):
             try:
-                r = requests.post(API_CMD, json=payload, timeout=6)
+                r = requests.post(API_CMD, json=payload_send, timeout=10)
                 r.raise_for_status()
                 st.success("Commande envoyée !")
-                st.json(r.json())
+                try:
+                    st.json(r.json())
+                except Exception:
+                    st.write(r.text)
             except Exception as e:
                 st.error(f"Erreur envoi commande : {e}")
+
+    with b2:
+        if st.button("Arrêter le moteur", use_container_width=True):
+            try:
+                r = requests.post(API_CMD, json=payload_stop, timeout=10)
+                r.raise_for_status()
+                st.warning("Moteur arrêté !")
+                try:
+                    st.json(r.json())
+                except Exception:
+                    st.write(r.text)
+            except Exception as e:
+                st.error(f"Erreur arrêt moteur : {e}")
 
 # -----------------------------
 # Page: Historique
@@ -266,7 +278,7 @@ elif page == "Historique":
         with top4:
             kpi("Vitesse (0-255)", f"{motor_speed}", "#5D6D7E")
 
-        st.markdown("### Gauges")
+        st.markdown("### Gauges (dernière mesure)")
         gg1, gg2 = st.columns(2)
         with gg1:
             gauge("Gaz (MQ2)", gaz_value, 0, 4095, suffix="ADC", seuil_rouge=3000)
@@ -274,20 +286,18 @@ elif page == "Historique":
             gauge("Vitesse moteur", motor_speed, 0, 255, suffix="/255", seuil_rouge=200)
 
         st.markdown("### Graphes")
-        if "date_local" in df.columns and "gaz" in df.columns:
-            fig_gaz = px.line(df, x="date_local", y="gaz", title="Évolution Gaz MQ2")
-            st.plotly_chart(fig_gaz, use_container_width=True)
-        if "date_local" in df.columns and "motor_speed" in df.columns:
-            fig_motor = px.line(df, x="date_local", y="motor_speed", title="Évolution vitesse moteur")
-            st.plotly_chart(fig_motor, use_container_width=True)
-        if "date_local" in df.columns and "alarme" in df.columns:
-            fig_al = px.line(df, x="date_local", y="alarme", title="Historique alarme (0/1)")
-            fig_al.update_traces(line_shape="hv")
-            st.plotly_chart(fig_al, use_container_width=True)
+        if "date_local" in df.columns:
+            if "gaz" in df.columns:
+                st.plotly_chart(px.line(df, x="date_local", y="gaz", title="Évolution Gaz MQ2"), use_container_width=True)
+            if "motor_speed" in df.columns:
+                st.plotly_chart(px.line(df, x="date_local", y="motor_speed", title="Évolution vitesse moteur"), use_container_width=True)
+            if "alarme" in df.columns:
+                fig_al = px.line(df, x="date_local", y="alarme", title="Historique alarme (0/1)")
+                fig_al.update_traces(line_shape="hv")
+                st.plotly_chart(fig_al, use_container_width=True)
 
         st.markdown("### Tableau")
         df_show = df.copy()
-
         if "date_local" in df_show.columns:
             ascending = True if ordre_tableau == "Plus ancien → plus récent" else False
             df_show = df_show.sort_values(by="date_local", ascending=ascending)
@@ -297,9 +307,7 @@ elif page == "Historique":
         cols = [c for c in cols if c in df_show.columns]
         st.dataframe(df_show[cols], use_container_width=True)
 
-# -----------------------------
 # Footer
-# -----------------------------
 st.markdown(
     "<hr><p style='text-align:center; font-size:12px; color:#888;'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
     unsafe_allow_html=True
