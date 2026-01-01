@@ -7,9 +7,6 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="HVAC - Salle Technique", layout="wide")
 
-# Auto-refresh (toutes les 5 secondes)
-st_autorefresh(interval=5000, key="auto_refresh")
-
 # -----------------------------
 # CSS
 # -----------------------------
@@ -98,11 +95,32 @@ def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
 # -----------------------------
 page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique"])
 
-# Bouton manuel (au cas où)
+# Slider de contrôle du refresh (en secondes)
+refresh_seconds = st.sidebar.slider(
+    "Temps de rafraîchissement (secondes)",
+    min_value=2,
+    max_value=10,
+    value=4,
+    step=1
+)
+
+# Auto-refresh UNIQUEMENT sur Vue générale
+if page == "Vue générale":
+    st_autorefresh(interval=refresh_seconds * 1000, key="auto_refresh_vue_generale")
+
 st.sidebar.write("Actualisation")
 if st.sidebar.button("Rafraîchir maintenant"):
     st.cache_data.clear()
     st.rerun()
+
+# Choix ordre tableau (uniquement pour Historique)
+ordre_tableau = "Plus récent → plus ancien"
+if page == "Historique":
+    ordre_tableau = st.sidebar.radio(
+        "Ordre du tableau",
+        ["Plus récent → plus ancien", "Plus ancien → plus récent"],
+        index=0
+    )
 
 # -----------------------------
 # API Secrets
@@ -120,7 +138,7 @@ def get_latest():
     r.raise_for_status()
     return r.json()
 
-@st.cache_data(ttl=5)
+@st.cache_data(ttl=8)
 def get_history():
     if not API_HISTORY:
         return pd.DataFrame()
@@ -264,7 +282,13 @@ elif page == "Historique":
 
         st.markdown("### Tableau")
         df_show = df.copy()
+
+        # Tri selon le choix utilisateur
         if "date_local" in df_show.columns:
+            ascending = True if ordre_tableau == "Plus ancien → plus récent" else False
+            df_show = df_show.sort_values(by="date_local", ascending=ascending)
+
+            # Format lisible après tri
             df_show["date_local"] = df_show["date_local"].dt.strftime("%d/%m/%Y %H:%M:%S")
 
         cols = ["id", "date_local", "temperature_lt", "humidite_lt", "gaz", "motor_speed", "alarme"]
@@ -273,6 +297,6 @@ elif page == "Historique":
 
 # Pied de page
 st.markdown(
-    "<hr><p style='text-align:center; font-size:12px; color:#888;'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
+    "<hr><p style='text-align:center; font-size:12px; color:#888;'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE304830]</p>",
     unsafe_allow_html=True
 )
