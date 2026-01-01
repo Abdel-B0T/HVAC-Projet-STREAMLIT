@@ -62,7 +62,6 @@ def kpi(title: str, value: str, color: str):
         unsafe_allow_html=True
     )
 
-# Gauge Plotly (titre non coupé)
 def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
     try:
         val = float(value)
@@ -95,7 +94,6 @@ def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
 # -----------------------------
 page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique"])
 
-# Slider de contrôle du refresh (en secondes)
 refresh_seconds = st.sidebar.slider(
     "Temps de rafraîchissement (secondes)",
     min_value=2,
@@ -113,7 +111,6 @@ if st.sidebar.button("Rafraîchir maintenant"):
     st.cache_data.clear()
     st.rerun()
 
-# Choix ordre tableau (uniquement pour Historique)
 ordre_tableau = "Plus récent → plus ancien"
 if page == "Historique":
     ordre_tableau = st.sidebar.radio(
@@ -127,6 +124,7 @@ if page == "Historique":
 # -----------------------------
 API_LATEST = st.secrets.get("API_LATEST", "").strip()
 API_HISTORY = st.secrets.get("API_HISTORY", "").strip()
+API_CMD = st.secrets.get("API_CMD", "").strip()  # <-- AJOUT
 
 if not API_LATEST:
     st.error("Secret manquant: API_LATEST. Va dans Streamlit Cloud > Settings > Secrets.")
@@ -174,7 +172,6 @@ if not df.empty and "date" in df.columns:
     df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce")
     df["date_local"] = df["date"].dt.tz_convert("Europe/Brussels")
 
-# Valeurs last
 temperature_lt = last.get("temperature_lt", "—")
 humidite_lt    = last.get("humidite_lt", "—")
 gaz_value      = last.get("gaz", "—")
@@ -218,25 +215,35 @@ if page == "Vue générale":
             if "temperature_lt" in df.columns:
                 fig_t = px.line(df, x="date_local", y="temperature_lt", title="Température")
                 st.plotly_chart(fig_t, use_container_width=True)
-            else:
-                st.info("Colonne temperature_lt manquante.")
         with p2:
             if "humidite_lt" in df.columns:
                 fig_h = px.line(df, x="date_local", y="humidite_lt", title="Humidité")
                 st.plotly_chart(fig_h, use_container_width=True)
-            else:
-                st.info("Colonne humidite_lt manquante.")
 
 # -----------------------------
-# Page: Commandes (UI)
+# Page: Commandes (ENVOI RÉEL)
 # -----------------------------
 elif page == "Commandes":
     st.subheader("Commandes - Salle technique")
-    st.info("Étape suivante : on envoie les commandes à Node-RED (POST) → MQTT → ESP32.")
+    st.info("Streamlit → POST Node-RED → MQTT → ESP32")
 
     vitesse = st.slider("Vitesse du moteur (0 à 255)", 0, 255, 120)
     mute = st.checkbox("Mute alarme", value=False)
-    st.write({"target_speed": vitesse, "mute": 1 if mute else 0})
+
+    payload = {"target_speed": vitesse, "mute": 1 if mute else 0}
+    st.json(payload)
+
+    if st.button("Envoyer la commande"):
+        if not API_CMD:
+            st.error("Secret manquant: API_CMD. Ajoute-le dans Streamlit Cloud > Settings > Secrets.")
+        else:
+            try:
+                r = requests.post(API_CMD, json=payload, timeout=6)
+                r.raise_for_status()
+                st.success("Commande envoyée !")
+                st.json(r.json())
+            except Exception as e:
+                st.error(f"Erreur envoi commande : {e}")
 
 # -----------------------------
 # Page: Historique
@@ -270,11 +277,9 @@ elif page == "Historique":
         if "date_local" in df.columns and "gaz" in df.columns:
             fig_gaz = px.line(df, x="date_local", y="gaz", title="Évolution Gaz MQ2")
             st.plotly_chart(fig_gaz, use_container_width=True)
-
         if "date_local" in df.columns and "motor_speed" in df.columns:
             fig_motor = px.line(df, x="date_local", y="motor_speed", title="Évolution vitesse moteur")
             st.plotly_chart(fig_motor, use_container_width=True)
-
         if "date_local" in df.columns and "alarme" in df.columns:
             fig_al = px.line(df, x="date_local", y="alarme", title="Historique alarme (0/1)")
             fig_al.update_traces(line_shape="hv")
@@ -283,20 +288,19 @@ elif page == "Historique":
         st.markdown("### Tableau")
         df_show = df.copy()
 
-        # Tri selon le choix utilisateur
         if "date_local" in df_show.columns:
             ascending = True if ordre_tableau == "Plus ancien → plus récent" else False
             df_show = df_show.sort_values(by="date_local", ascending=ascending)
-
-            # Format lisible après tri
             df_show["date_local"] = df_show["date_local"].dt.strftime("%d/%m/%Y %H:%M:%S")
 
         cols = ["id", "date_local", "temperature_lt", "humidite_lt", "gaz", "motor_speed", "alarme"]
         cols = [c for c in cols if c in df_show.columns]
         st.dataframe(df_show[cols], use_container_width=True)
 
-# Pied de page
+# -----------------------------
+# Footer
+# -----------------------------
 st.markdown(
-    "<hr><p style='text-align:center; font-size:12px; color:#888;'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE304830]</p>",
+    "<hr><p style='text-align:center; font-size:12px; color:#888;'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
     unsafe_allow_html=True
 )
