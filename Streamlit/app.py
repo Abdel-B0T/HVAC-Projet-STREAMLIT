@@ -92,18 +92,11 @@ def safe_int(x, default=0):
 def fmt_date(dt_value):
     if dt_value is None:
         return "—"
-
     ts = pd.to_datetime(dt_value, errors="coerce")
     if pd.isna(ts):
         return str(dt_value)
-
-    # Si pas de timezone -> on suppose que c'est déjà Europe/Brussels
-    if ts.tzinfo is None:
-        ts = ts.tz_localize("Europe/Brussels", ambiguous="infer", nonexistent="shift_forward")
-    else:
-        ts = ts.tz_convert("Europe/Brussels")
-
     return ts.strftime("%d/%m/%Y %H:%M:%S")
+
 
 # Sidebar
 page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique"])
@@ -163,7 +156,7 @@ df = get_history()
 
 # Conversion dates historique (sans forcer utc=True)
 if not df.empty and "date" in df.columns:
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    df["date_local"] = pd.to_datetime(df["date"], errors="coerce")
 
     # Si naive -> on suppose déjà Brussels
     if df["date"].dt.tz is None:
