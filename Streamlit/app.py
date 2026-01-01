@@ -3,8 +3,12 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import requests
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="HVAC - Salle Technique", layout="wide")
+
+# Auto-refresh (toutes les 5 secondes)
+st_autorefresh(interval=5000, key="auto_refresh")
 
 # -----------------------------
 # CSS
@@ -94,8 +98,9 @@ def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
 # -----------------------------
 page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique"])
 
+# Bouton manuel (au cas où)
 st.sidebar.write("Actualisation")
-if st.sidebar.button("Rafraîchir les données"):
+if st.sidebar.button("Rafraîchir maintenant"):
     st.cache_data.clear()
     st.rerun()
 
@@ -224,10 +229,8 @@ elif page == "Historique":
     if df.empty:
         st.error("Aucun historique (API_HISTORY pas configurée ou pas de données).")
     else:
-        # Date sous le titre (propre)
         st.markdown(f"<div class='small-note'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
 
-        # KPIs cohérents (pas de gros bloc "date")
         top1, top2, top3, top4 = st.columns(4)
         with top1:
             kpi("Température (°C)", f"{temperature_lt}", "#2E86C1")

@@ -5,3 +5,4 @@ paho-mqtt
 mysql-connector-python
 firebase-admin
 plotly
+streamlit-autorefresh
