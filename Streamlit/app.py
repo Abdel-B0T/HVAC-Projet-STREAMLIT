@@ -27,6 +27,7 @@ st.markdown("""
     color: #666;
     font-size: 13px;
     margin-top: -6px;
+    margin-bottom: 10px;
 }
 .kpi-card {
     padding: 14px;
@@ -60,6 +61,7 @@ def kpi(title: str, value: str, color: str):
         unsafe_allow_html=True
     )
 
+# Gauge Plotly (titre non coupé)
 def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
     try:
         val = float(value)
@@ -76,11 +78,15 @@ def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
         value=val,
-        title={"text": title},
-        number={"suffix": f" {suffix}"},
+        title={"text": title, "font": {"size": 18}},
+        number={"suffix": f" {suffix}", "font": {"size": 48}},
         gauge={"axis": {"range": [vmin, vmax]}, "steps": steps}
     ))
-    fig.update_layout(margin=dict(l=10, r=10, t=45, b=10), height=280)
+
+    fig.update_layout(
+        margin=dict(l=20, r=20, t=80, b=20),
+        height=320
+    )
     st.plotly_chart(fig, use_container_width=True)
 
 # -----------------------------
@@ -118,16 +124,12 @@ def get_history():
     return pd.DataFrame(r.json())
 
 def fmt_date(dt_value):
-    if pd.isna(dt_value) or dt_value is None:
+    if dt_value is None:
         return "—"
-    try:
-        ts = pd.to_datetime(dt_value, utc=True, errors="coerce")
-        if pd.isna(ts):
-            return str(dt_value)
-        # format lisible
-        return ts.tz_convert("Europe/Brussels").strftime("%d/%m/%Y %H:%M:%S")
-    except Exception:
+    ts = pd.to_datetime(dt_value, utc=True, errors="coerce")
+    if pd.isna(ts):
         return str(dt_value)
+    return ts.tz_convert("Europe/Brussels").strftime("%d/%m/%Y %H:%M:%S")
 
 def safe_int(x, default=0):
     try:
@@ -147,7 +149,6 @@ except Exception as e:
 df = get_history()
 if not df.empty and "date" in df.columns:
     df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce")
-    # pour affichage/axes plus propres (timezone BE)
     df["date_local"] = df["date"].dt.tz_convert("Europe/Brussels")
 
 # Valeurs last
@@ -178,7 +179,7 @@ if page == "Vue générale":
     with c4:
         kpi("Vitesse (0-255)", f"{motor_speed}", "#5D6D7E")
 
-    st.markdown("### Gauges (Gaz / Vitesse moteur)")
+    st.markdown("### Gauges")
     g1, g2 = st.columns(2)
     with g1:
         gauge("Gaz (MQ2)", gaz_value, 0, 4095, suffix="ADC", seuil_rouge=3000)
@@ -212,7 +213,6 @@ elif page == "Commandes":
 
     vitesse = st.slider("Vitesse du moteur (0 à 255)", 0, 255, 120)
     mute = st.checkbox("Mute alarme", value=False)
-
     st.write({"target_speed": vitesse, "mute": 1 if mute else 0})
 
 # -----------------------------
@@ -224,19 +224,21 @@ elif page == "Historique":
     if df.empty:
         st.error("Aucun historique (API_HISTORY pas configurée ou pas de données).")
     else:
-        # En haut: gauges + infos (meilleure visu)
-        top1, top2, top3, top4 = st.columns(4)
+        # Date sous le titre (propre)
+        st.markdown(f"<div class='small-note'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
 
+        # KPIs cohérents (pas de gros bloc "date")
+        top1, top2, top3, top4 = st.columns(4)
         with top1:
-            kpi("Dernière température (°C)", f"{temperature_lt}", "#2E86C1")
+            kpi("Température (°C)", f"{temperature_lt}", "#2E86C1")
         with top2:
-            kpi("Dernière humidité (%)", f"{humidite_lt}", "#239B56")
+            kpi("Humidité (%)", f"{humidite_lt}", "#239B56")
         with top3:
             kpi("Alarme", alarme_txt, "#C0392B" if alarme_txt == "ACTIF" else "#5D6D7E")
         with top4:
-            kpi("Dernière mesure", fmt_date(date_value), "#5D6D7E")
+            kpi("Vitesse (0-255)", f"{motor_speed}", "#5D6D7E")
 
-        st.markdown("### Gauges (sur la dernière mesure)")
+        st.markdown("### Gauges")
         gg1, gg2 = st.columns(2)
         with gg1:
             gauge("Gaz (MQ2)", gaz_value, 0, 4095, suffix="ADC", seuil_rouge=3000)
@@ -258,12 +260,13 @@ elif page == "Historique":
             st.plotly_chart(fig_al, use_container_width=True)
 
         st.markdown("### Tableau")
-        # Affichage plus propre de la date
         df_show = df.copy()
         if "date_local" in df_show.columns:
             df_show["date_local"] = df_show["date_local"].dt.strftime("%d/%m/%Y %H:%M:%S")
-        st.dataframe(df_show[["id", "date_local", "temperature_lt", "humidite_lt", "gaz", "motor_speed", "alarme"]],
-                     use_container_width=True)
+
+        cols = ["id", "date_local", "temperature_lt", "humidite_lt", "gaz", "motor_speed", "alarme"]
+        cols = [c for c in cols if c in df_show.columns]
+        st.dataframe(df_show[cols], use_container_width=True)
 
 # Pied de page
 st.markdown(
