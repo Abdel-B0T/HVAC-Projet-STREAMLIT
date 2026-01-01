@@ -7,9 +7,7 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="HVAC - Salle Technique", layout="wide")
 
-# -----------------------------
 # CSS
-# -----------------------------
 st.markdown("""
 <style>
 .header {
@@ -82,13 +80,32 @@ def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
         number={"suffix": f" {suffix}", "font": {"size": 48}},
         gauge={"axis": {"range": [vmin, vmax]}, "steps": steps}
     ))
-
     fig.update_layout(margin=dict(l=20, r=20, t=90, b=20), height=320)
     st.plotly_chart(fig, use_container_width=True)
 
-# -----------------------------
+def safe_int(x, default=0):
+    try:
+        return int(float(x))
+    except Exception:
+        return default
+
+def fmt_date(dt_value):
+    if dt_value is None:
+        return "—"
+
+    ts = pd.to_datetime(dt_value, errors="coerce")
+    if pd.isna(ts):
+        return str(dt_value)
+
+    # Si pas de timezone -> on suppose que c'est déjà Europe/Brussels
+    if ts.tzinfo is None:
+        ts = ts.tz_localize("Europe/Brussels", ambiguous="infer", nonexistent="shift_forward")
+    else:
+        ts = ts.tz_convert("Europe/Brussels")
+
+    return ts.strftime("%d/%m/%Y %H:%M:%S")
+
 # Sidebar
-# -----------------------------
 page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique"])
 
 refresh_seconds = st.sidebar.slider(
@@ -96,6 +113,7 @@ refresh_seconds = st.sidebar.slider(
     min_value=2, max_value=15, value=5, step=1
 )
 
+# Auto-refresh uniquement sur Vue générale
 if page == "Vue générale":
     st_autorefresh(interval=refresh_seconds * 1000, key="auto_refresh_vg")
 
@@ -111,9 +129,7 @@ if page == "Historique":
         index=0
     )
 
-# -----------------------------
 # Secrets
-# -----------------------------
 API_LATEST = st.secrets.get("API_LATEST", "").strip()
 API_HISTORY = st.secrets.get("API_HISTORY", "").strip()
 API_CMD = st.secrets.get("API_CMD", "").strip()
@@ -136,23 +152,7 @@ def get_history():
     r.raise_for_status()
     return pd.DataFrame(r.json())
 
-def fmt_date(dt_value):
-    if dt_value is None:
-        return "—"
-    ts = pd.to_datetime(dt_value, utc=True, errors="coerce")
-    if pd.isna(ts):
-        return str(dt_value)
-    return ts.tz_convert("Europe/Brussels").strftime("%d/%m/%Y %H:%M:%S")
-
-def safe_int(x, default=0):
-    try:
-        return int(float(x))
-    except Exception:
-        return default
-
-# -----------------------------
 # Data
-# -----------------------------
 try:
     last = get_latest()
 except Exception as e:
@@ -160,9 +160,16 @@ except Exception as e:
     st.stop()
 
 df = get_history()
+
+# Conversion dates historique (sans forcer utc=True)
 if not df.empty and "date" in df.columns:
-    df["date"] = pd.to_datetime(df["date"], utc=True, errors="coerce")
-    df["date_local"] = df["date"].dt.tz_convert("Europe/Brussels")
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+
+    # Si naive -> on suppose déjà Brussels
+    if df["date"].dt.tz is None:
+        df["date_local"] = df["date"].dt.tz_localize("Europe/Brussels", ambiguous="infer", nonexistent="shift_forward")
+    else:
+        df["date_local"] = df["date"].dt.tz_convert("Europe/Brussels")
 
 temperature_lt = last.get("temperature_lt", "—")
 humidite_lt    = last.get("humidite_lt", "—")
@@ -174,9 +181,7 @@ date_value     = last.get("date", None)
 alarme_int = safe_int(alarme_value, 0)
 alarme_txt = "ACTIF" if alarme_int == 1 else "INACTIF"
 
-# -----------------------------
 # Page: Vue générale
-# -----------------------------
 if page == "Vue générale":
     st.subheader("Vue générale - Salle technique")
     st.markdown(f"<div class='small-note'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
@@ -210,9 +215,7 @@ if page == "Vue générale":
             if "humidite_lt" in df.columns:
                 st.plotly_chart(px.line(df, x="date_local", y="humidite_lt", title="Humidité"), use_container_width=True)
 
-# -----------------------------
 # Page: Commandes
-# -----------------------------
 elif page == "Commandes":
     st.subheader("Commandes - Salle technique")
     st.info("Streamlit → POST Node-RED → MQTT → ESP32")
@@ -257,9 +260,7 @@ elif page == "Commandes":
             except Exception as e:
                 st.error(f"Erreur arrêt moteur : {e}")
 
-# -----------------------------
 # Page: Historique
-# -----------------------------
 elif page == "Historique":
     st.subheader("Historique - mesures_hvac")
 
@@ -298,6 +299,7 @@ elif page == "Historique":
 
         st.markdown("### Tableau")
         df_show = df.copy()
+
         if "date_local" in df_show.columns:
             ascending = True if ordre_tableau == "Plus ancien → plus récent" else False
             df_show = df_show.sort_values(by="date_local", ascending=ascending)
