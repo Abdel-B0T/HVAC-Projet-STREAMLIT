@@ -7,20 +7,20 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="HVAC - Salle Technique", layout="wide")
 
-# Style global sombre proche de Node-RED dashboard
+# Style sombre (lisible dans la sidebar aussi)
 st.markdown("""
 <style>
 :root{
   --bg:#0b1220;
-  --panel:#111c2f;
+  --panel:#0f1b33;
   --card:#15253e;
   --text:#e8eefc;
-  --muted:#9fb0cf;
+  --muted:#b7c6e6;
   --line:#22324c;
-  --accent:#22c55e;
-  --danger:#ef4444;
-  --info:#60a5fa;
-  --warn:#f59e0b;
+  --blue:#60a5fa;
+  --green:#22c55e;
+  --red:#ef4444;
+  --orange:#f59e0b;
 }
 
 html, body, [data-testid="stAppViewContainer"]{
@@ -29,12 +29,8 @@ html, body, [data-testid="stAppViewContainer"]{
 }
 
 [data-testid="stSidebar"]{
-  background: #0a1427;
+  background: #081327;
   border-right: 1px solid var(--line);
-}
-
-[data-testid="stSidebar"] *{
-  color: var(--text);
 }
 
 .header{
@@ -50,7 +46,7 @@ html, body, [data-testid="stAppViewContainer"]{
   text-align: center;
   font-size: 26px;
   margin: 0;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .subhead{
@@ -60,23 +56,23 @@ html, body, [data-testid="stAppViewContainer"]{
   margin-bottom: 10px;
 }
 
-.badge{
-  display:inline-block;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 12px;
-  border: 1px solid var(--line);
+.section-title{
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+  margin-top: 10px;
 }
 
-.badge-ok{ background: rgba(34,197,94,.15); color: #86efac; }
-.badge-eco{ background: rgba(96,165,250,.12); color: #93c5fd; }
-.badge-alarm{ background: rgba(239,68,68,.15); color: #fca5a5; }
+.block{
+  background: rgba(21,37,62,0.55);
+  border: 1px solid var(--line);
+  padding: 14px;
+  border-radius: 14px;
+}
 
-.kpi-row{
-  display:flex;
-  gap: 12px;
-  margin-bottom: 8px;
+.small{
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .kpi-card{
@@ -84,7 +80,6 @@ html, body, [data-testid="stAppViewContainer"]{
   border: 1px solid var(--line);
   padding: 14px;
   border-radius: 14px;
-  text-align: left;
 }
 
 .kpi-title{
@@ -98,27 +93,22 @@ html, body, [data-testid="stAppViewContainer"]{
   color: var(--text);
   margin: 0;
   font-size: 32px;
-  font-weight: 800;
+  font-weight: 900;
 }
 
-.section-title{
-  color: var(--text);
-  font-size: 18px;
+.badge{
+  display:inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
   font-weight: 800;
-  margin-top: 10px;
-}
-
-.block{
-  background: var(--panel);
+  font-size: 12px;
   border: 1px solid var(--line);
-  padding: 14px;
-  border-radius: 14px;
+  margin-left: 6px;
 }
-
-.small{
-  color: var(--muted);
-  font-size: 13px;
-}
+.badge-confort{ background: rgba(34,197,94,.15); color: #86efac; }
+.badge-eco{ background: rgba(96,165,250,.12); color: #93c5fd; }
+.badge-alarm{ background: rgba(239,68,68,.15); color: #fca5a5; }
+.badge-off{ background: rgba(183,198,230,.12); color: rgba(232,238,252,.9); }
 
 hr{
   border: none;
@@ -126,23 +116,52 @@ hr{
   margin: 16px 0;
 }
 
-[data-testid="stMetricValue"]{
-  color: var(--text);
+/* Sidebar : force les couleurs du texte et des labels */
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] div{
+  color: var(--text) !important;
 }
 
-[data-testid="stMetricDelta"]{
-  color: var(--muted);
+/* Inputs sidebar */
+[data-testid="stSidebar"] .stSelectbox,
+[data-testid="stSidebar"] .stSlider,
+[data-testid="stSidebar"] .stRadio,
+[data-testid="stSidebar"] .stButton{
+  color: var(--text) !important;
 }
 
-button[kind="primary"]{
+/* Fond des widgets (selectbox) */
+[data-testid="stSidebar"] [data-baseweb="select"] > div{
+  background: rgba(21,37,62,0.85) !important;
+  border: 1px solid var(--line) !important;
+}
+
+/* Fond des inputs */
+[data-baseweb="input"] > div{
+  background: rgba(21,37,62,0.85) !important;
+  border: 1px solid var(--line) !important;
+}
+
+/* Radio */
+[data-testid="stSidebar"] [role="radiogroup"]{
+  background: rgba(21,37,62,0.35);
+  border: 1px solid var(--line);
+  padding: 10px;
   border-radius: 12px;
 }
 
+/* Boutons */
 [data-testid="stButton"] button{
   border-radius: 12px;
   border: 1px solid var(--line);
 }
 
+/* Plotly transparent */
+.js-plotly-plot .plotly, .js-plotly-plot .plotly div{
+  background: rgba(0,0,0,0) !important;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -181,15 +200,17 @@ def kpi_card(title: str, value: str):
 
 def badge_mode(mode_txt: str):
     if mode_txt == "CONFORT":
-        st.markdown("<span class='badge badge-ok'>MODE : CONFORT</span>", unsafe_allow_html=True)
-    else:
+        st.markdown("<span class='badge badge-confort'>MODE : CONFORT</span>", unsafe_allow_html=True)
+    elif mode_txt == "ECO":
         st.markdown("<span class='badge badge-eco'>MODE : ECO</span>", unsafe_allow_html=True)
+    else:
+        st.markdown("<span class='badge badge-off'>MODE : —</span>", unsafe_allow_html=True)
 
 def badge_alarm(is_alarm: bool):
     if is_alarm:
         st.markdown("<span class='badge badge-alarm'>ALARME : ACTIVE</span>", unsafe_allow_html=True)
     else:
-        st.markdown("<span class='badge badge-eco'>ALARME : INACTIVE</span>", unsafe_allow_html=True)
+        st.markdown("<span class='badge badge-off'>ALARME : INACTIVE</span>", unsafe_allow_html=True)
 
 def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None):
     val = safe_float(value, 0.0)
@@ -207,7 +228,7 @@ def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None):
         title={"text": title, "font": {"size": 16, "color": "rgba(232,238,252,0.95)"}},
         number={"suffix": f" {unit}" if unit else "", "font": {"size": 44, "color": "rgba(232,238,252,0.95)"}},
         gauge={
-            "axis": {"range": [vmin, vmax], "tickcolor": "rgba(159,176,207,0.9)"},
+            "axis": {"range": [vmin, vmax], "tickcolor": "rgba(183,198,230,0.9)"},
             "bar": {"color": "rgba(96,165,250,0.85)"},
             "bgcolor": "rgba(0,0,0,0)",
             "borderwidth": 0,
@@ -242,7 +263,6 @@ refresh_seconds = st.sidebar.slider(
     min_value=2, max_value=15, value=5, step=1
 )
 
-# Auto-refresh uniquement sur Vue générale
 if page == "Vue générale":
     st_autorefresh(interval=refresh_seconds * 1000, key="auto_refresh_vg")
 
@@ -290,14 +310,17 @@ except Exception as e:
 
 df = get_history()
 
-# Conversion dates historique
+# Conversion dates historique (fix .dt)
 if not df.empty and "date" in df.columns:
     df["date_local"] = pd.to_datetime(df["date"], errors="coerce")
-
-    if df["date"].dt.tz is None:
-        df["date_local"] = df["date"].dt.tz_localize("Europe/Brussels", ambiguous="infer", nonexistent="shift_forward")
+    if df["date_local"].dt.tz is None:
+        df["date_local"] = df["date_local"].dt.tz_localize(
+            "Europe/Brussels",
+            ambiguous="infer",
+            nonexistent="shift_forward"
+        )
     else:
-        df["date_local"] = df["date"].dt.tz_convert("Europe/Brussels")
+        df["date_local"] = df["date_local"].dt.tz_convert("Europe/Brussels")
 
 temperature_lt = last.get("temperature_lt", "—")
 humidite_lt    = last.get("humidite_lt", "—")
@@ -306,7 +329,6 @@ motor_speed    = last.get("motor_speed", "—")
 alarme_value   = last.get("alarme", "—")
 date_value     = last.get("date", None)
 
-# Mode (si dispo côté API)
 mode_confort = last.get("mode_confort", None)
 mode_txt = "—"
 if mode_confort is not None:
@@ -315,19 +337,18 @@ if mode_confort is not None:
 alarme_int = safe_int(alarme_value, 0)
 alarme_txt = "ACTIF" if alarme_int == 1 else "INACTIF"
 
-# Zone info sous-titre
-left_info, right_info = st.columns([2, 1])
-with left_info:
+# Ligne d'infos en haut
+top_left, top_right = st.columns([2, 1])
+with top_left:
     st.markdown(f"<div class='subhead'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
-with right_info:
-    cols_badges = st.columns(2)
-    with cols_badges[0]:
-        if mode_txt != "—":
-            badge_mode(mode_txt)
-    with cols_badges[1]:
+with top_right:
+    b1, b2 = st.columns(2)
+    with b1:
+        badge_mode(mode_txt)
+    with b2:
         badge_alarm(alarme_int == 1)
 
-# Page: Vue générale
+# Page Vue générale
 if page == "Vue générale":
     st.markdown("<div class='section-title'>Vue générale</div>", unsafe_allow_html=True)
 
@@ -364,7 +385,7 @@ if page == "Vue générale":
                 style_plot(fig, "Date / heure", "Humidité (%)")
                 st.plotly_chart(fig, use_container_width=True)
 
-# Page: Commandes
+# Page Commandes
 elif page == "Commandes":
     st.markdown("<div class='section-title'>Commandes</div>", unsafe_allow_html=True)
 
@@ -375,15 +396,16 @@ elif page == "Commandes":
     st.markdown("<div class='block'>", unsafe_allow_html=True)
     st.markdown("<div class='small'>Streamlit envoie une commande à Node-RED, puis Node-RED publie via MQTT vers l'ESP32.</div>", unsafe_allow_html=True)
 
-    cc1, cc2 = st.columns([2, 1])
-    with cc1:
+    col_form, col_payload = st.columns([2, 1])
+    with col_form:
         vitesse = st.slider("Vitesse moteur (0 à 255)", 0, 255, 120)
         mute = st.checkbox("Couper le buzzer (mute alarme)", value=False)
 
-    with cc2:
+    payload_send = {"target_speed": int(vitesse), "mute": 1 if mute else 0}
+    payload_stop = {"target_speed": 0, "mute": 1 if mute else 0}
+
+    with col_payload:
         st.markdown("<div class='small'>Payload envoyé</div>", unsafe_allow_html=True)
-        payload_send = {"target_speed": int(vitesse), "mute": 1 if mute else 0}
-        payload_stop = {"target_speed": 0, "mute": 1 if mute else 0}
         st.json(payload_send)
 
     b1, b2 = st.columns(2)
@@ -418,7 +440,7 @@ elif page == "Commandes":
     with s4:
         kpi_card("Vitesse", f"{motor_speed} /255")
 
-# Page: Historique
+# Page Historique
 elif page == "Historique":
     st.markdown("<div class='section-title'>Historique</div>", unsafe_allow_html=True)
 
@@ -442,24 +464,28 @@ elif page == "Historique":
         st.markdown("<div class='section-title'>Courbes</div>", unsafe_allow_html=True)
 
         if "date_local" in df.columns:
-            if "temperature_lt" in df.columns:
-                fig = px.line(df, x="date_local", y="temperature_lt", title="Historique température")
-                style_plot(fig, "Date / heure", "Température (°C)")
-                st.plotly_chart(fig, use_container_width=True)
+            tcol, hcol = st.columns(2)
 
-            if "humidite_lt" in df.columns:
-                fig = px.line(df, x="date_local", y="humidite_lt", title="Historique humidité")
-                style_plot(fig, "Date / heure", "Humidité (%)")
-                st.plotly_chart(fig, use_container_width=True)
+            with tcol:
+                if "temperature_lt" in df.columns:
+                    fig = px.line(df, x="date_local", y="temperature_lt", title="Historique température")
+                    style_plot(fig, "Date / heure", "Température (°C)")
+                    st.plotly_chart(fig, use_container_width=True)
 
-            hh1, hh2 = st.columns(2)
-            with hh1:
+            with hcol:
+                if "humidite_lt" in df.columns:
+                    fig = px.line(df, x="date_local", y="humidite_lt", title="Historique humidité")
+                    style_plot(fig, "Date / heure", "Humidité (%)")
+                    st.plotly_chart(fig, use_container_width=True)
+
+            g1, g2 = st.columns(2)
+            with g1:
                 if "gaz" in df.columns:
                     fig = px.line(df, x="date_local", y="gaz", title="Historique gaz MQ-2")
                     style_plot(fig, "Date / heure", "Gaz (ADC)")
                     st.plotly_chart(fig, use_container_width=True)
 
-            with hh2:
+            with g2:
                 if "motor_speed" in df.columns:
                     fig = px.line(df, x="date_local", y="motor_speed", title="Historique vitesse moteur")
                     style_plot(fig, "Date / heure", "Vitesse (0–255)")
@@ -485,6 +511,6 @@ elif page == "Historique":
 
 # Footer
 st.markdown(
-    "<hr><p style='text-align:center; font-size:12px; color:rgba(159,176,207,0.9);'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
+    "<hr><p style='text-align:center; font-size:12px; color:rgba(183,198,230,0.9);'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
     unsafe_allow_html=True
 )
