@@ -7,81 +7,152 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="HVAC - Salle Technique", layout="wide")
 
-# CSS
+# Style global sombre proche de Node-RED dashboard
 st.markdown("""
 <style>
-.header {
-    background-color: #1F1F1F;
-    padding: 16px;
-    border-radius: 14px;
-    margin-bottom: 18px;
+:root{
+  --bg:#0b1220;
+  --panel:#111c2f;
+  --card:#15253e;
+  --text:#e8eefc;
+  --muted:#9fb0cf;
+  --line:#22324c;
+  --accent:#22c55e;
+  --danger:#ef4444;
+  --info:#60a5fa;
+  --warn:#f59e0b;
 }
-.header h1 {
-    color: white;
-    text-align: center;
-    font-size: 26px;
-    margin: 0;
+
+html, body, [data-testid="stAppViewContainer"]{
+  background: var(--bg);
+  color: var(--text);
 }
-.small-note {
-    color: #666;
-    font-size: 13px;
-    margin-top: -6px;
-    margin-bottom: 10px;
+
+[data-testid="stSidebar"]{
+  background: #0a1427;
+  border-right: 1px solid var(--line);
 }
-.kpi-card {
-    padding: 14px;
-    border-radius: 14px;
-    text-align: center;
-    margin-bottom: 10px;
+
+[data-testid="stSidebar"] *{
+  color: var(--text);
 }
-.kpi-card h4 {
-    color: white;
-    margin: 0 0 6px 0;
-    font-weight: 600;
+
+.header{
+  background: linear-gradient(90deg, #0f1b33, #0b1220);
+  border: 1px solid var(--line);
+  padding: 18px;
+  border-radius: 14px;
+  margin-bottom: 14px;
 }
-.kpi-card h2 {
-    color: white;
-    margin: 0;
-    font-size: 36px;
+
+.header h1{
+  color: var(--text);
+  text-align: center;
+  font-size: 26px;
+  margin: 0;
+  font-weight: 700;
 }
+
+.subhead{
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: -6px;
+  margin-bottom: 10px;
+}
+
+.badge{
+  display:inline-block;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 12px;
+  border: 1px solid var(--line);
+}
+
+.badge-ok{ background: rgba(34,197,94,.15); color: #86efac; }
+.badge-eco{ background: rgba(96,165,250,.12); color: #93c5fd; }
+.badge-alarm{ background: rgba(239,68,68,.15); color: #fca5a5; }
+
+.kpi-row{
+  display:flex;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.kpi-card{
+  background: var(--card);
+  border: 1px solid var(--line);
+  padding: 14px;
+  border-radius: 14px;
+  text-align: left;
+}
+
+.kpi-title{
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0 0 6px 0;
+  font-weight: 600;
+}
+
+.kpi-value{
+  color: var(--text);
+  margin: 0;
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.section-title{
+  color: var(--text);
+  font-size: 18px;
+  font-weight: 800;
+  margin-top: 10px;
+}
+
+.block{
+  background: var(--panel);
+  border: 1px solid var(--line);
+  padding: 14px;
+  border-radius: 14px;
+}
+
+.small{
+  color: var(--muted);
+  font-size: 13px;
+}
+
+hr{
+  border: none;
+  border-top: 1px solid var(--line);
+  margin: 16px 0;
+}
+
+[data-testid="stMetricValue"]{
+  color: var(--text);
+}
+
+[data-testid="stMetricDelta"]{
+  color: var(--muted);
+}
+
+button[kind="primary"]{
+  border-radius: 12px;
+}
+
+[data-testid="stButton"] button{
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown("<div class='header'><h1>Supervision HVAC – Salle Technique</h1></div>", unsafe_allow_html=True)
 
-def kpi(title: str, value: str, color: str):
-    st.markdown(
-        f"""
-        <div class="kpi-card" style="background-color:{color};">
-            <h4>{title}</h4>
-            <h2>{value}</h2>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-
-def gauge(title, value, vmin, vmax, suffix="", seuil_rouge=None):
+def safe_float(x, default=0.0):
     try:
-        val = float(value)
+        return float(x)
     except Exception:
-        val = 0.0
-
-    steps = None
-    if seuil_rouge is not None:
-        steps = [
-            {"range": [vmin, seuil_rouge], "color": "lightgray"},
-            {"range": [seuil_rouge, vmax], "color": "red"},
-        ]
-
-    fig = go.Figure(go.Indicator(
-        mode="gauge+number",
-        value=val,
-        title={"text": title, "font": {"size": 18}},
-        number={"suffix": f" {suffix}", "font": {"size": 48}},
-        gauge={"axis": {"range": [vmin, vmax]}, "steps": steps}
-    ))
-    fig.update_layout(margin=dict(l=20, r=20, t=90, b=20), height=320)
-    st.plotly_chart(fig, use_container_width=True)
+        return default
 
 def safe_int(x, default=0):
     try:
@@ -97,6 +168,71 @@ def fmt_date(dt_value):
         return str(dt_value)
     return ts.strftime("%d/%m/%Y %H:%M:%S")
 
+def kpi_card(title: str, value: str):
+    st.markdown(
+        f"""
+        <div class="kpi-card">
+            <div class="kpi-title">{title}</div>
+            <div class="kpi-value">{value}</div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+
+def badge_mode(mode_txt: str):
+    if mode_txt == "CONFORT":
+        st.markdown("<span class='badge badge-ok'>MODE : CONFORT</span>", unsafe_allow_html=True)
+    else:
+        st.markdown("<span class='badge badge-eco'>MODE : ECO</span>", unsafe_allow_html=True)
+
+def badge_alarm(is_alarm: bool):
+    if is_alarm:
+        st.markdown("<span class='badge badge-alarm'>ALARME : ACTIVE</span>", unsafe_allow_html=True)
+    else:
+        st.markdown("<span class='badge badge-eco'>ALARME : INACTIVE</span>", unsafe_allow_html=True)
+
+def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None):
+    val = safe_float(value, 0.0)
+
+    steps = None
+    if seuil_rouge is not None:
+        steps = [
+            {"range": [vmin, seuil_rouge], "color": "rgba(255,255,255,0.18)"},
+            {"range": [seuil_rouge, vmax], "color": "rgba(239,68,68,0.9)"},
+        ]
+
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=val,
+        title={"text": title, "font": {"size": 16, "color": "rgba(232,238,252,0.95)"}},
+        number={"suffix": f" {unit}" if unit else "", "font": {"size": 44, "color": "rgba(232,238,252,0.95)"}},
+        gauge={
+            "axis": {"range": [vmin, vmax], "tickcolor": "rgba(159,176,207,0.9)"},
+            "bar": {"color": "rgba(96,165,250,0.85)"},
+            "bgcolor": "rgba(0,0,0,0)",
+            "borderwidth": 0,
+            "steps": steps
+        }
+    ))
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        margin=dict(l=20, r=20, t=70, b=10),
+        height=300
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+def style_plot(fig, x_title: str, y_title: str):
+    fig.update_layout(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font=dict(color="rgba(232,238,252,0.95)"),
+        xaxis=dict(title=x_title, gridcolor="rgba(34,50,76,0.6)", zerolinecolor="rgba(34,50,76,0.6)"),
+        yaxis=dict(title=y_title, gridcolor="rgba(34,50,76,0.6)", zerolinecolor="rgba(34,50,76,0.6)"),
+        margin=dict(l=40, r=20, t=50, b=40),
+        legend=dict(bgcolor="rgba(0,0,0,0)")
+    )
+    fig.update_traces(line_width=2)
 
 # Sidebar
 page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique"])
@@ -154,11 +290,10 @@ except Exception as e:
 
 df = get_history()
 
-# Conversion dates historique (sans forcer utc=True)
+# Conversion dates historique
 if not df.empty and "date" in df.columns:
     df["date_local"] = pd.to_datetime(df["date"], errors="coerce")
 
-    # Si naive -> on suppose déjà Brussels
     if df["date"].dt.tz is None:
         df["date_local"] = df["date"].dt.tz_localize("Europe/Brussels", ambiguous="infer", nonexistent="shift_forward")
     else:
@@ -171,72 +306,93 @@ motor_speed    = last.get("motor_speed", "—")
 alarme_value   = last.get("alarme", "—")
 date_value     = last.get("date", None)
 
+# Mode (si dispo côté API)
+mode_confort = last.get("mode_confort", None)
+mode_txt = "—"
+if mode_confort is not None:
+    mode_txt = "CONFORT" if safe_int(mode_confort, 0) == 1 else "ECO"
+
 alarme_int = safe_int(alarme_value, 0)
 alarme_txt = "ACTIF" if alarme_int == 1 else "INACTIF"
 
+# Zone info sous-titre
+left_info, right_info = st.columns([2, 1])
+with left_info:
+    st.markdown(f"<div class='subhead'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
+with right_info:
+    cols_badges = st.columns(2)
+    with cols_badges[0]:
+        if mode_txt != "—":
+            badge_mode(mode_txt)
+    with cols_badges[1]:
+        badge_alarm(alarme_int == 1)
+
 # Page: Vue générale
 if page == "Vue générale":
-    st.subheader("Vue générale - Salle technique")
-    st.markdown(f"<div class='small-note'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-title'>Vue générale</div>", unsafe_allow_html=True)
 
     c1, c2, c3, c4 = st.columns(4)
     with c1:
-        kpi("Température (°C)", f"{temperature_lt}", "#2E86C1")
+        kpi_card("Température", f"{temperature_lt} °C")
     with c2:
-        kpi("Humidité (%)", f"{humidite_lt}", "#239B56")
+        kpi_card("Humidité", f"{humidite_lt} %")
     with c3:
-        kpi("Alarme", alarme_txt, "#C0392B" if alarme_txt == "ACTIF" else "#5D6D7E")
+        kpi_card("État alarme", alarme_txt)
     with c4:
-        kpi("Vitesse (0-255)", f"{motor_speed}", "#5D6D7E")
+        kpi_card("Vitesse moteur", f"{motor_speed} /255")
 
-    st.markdown("### Gauges (dernière mesure)")
+    st.markdown("<div class='section-title'>Jauges</div>", unsafe_allow_html=True)
     g1, g2 = st.columns(2)
     with g1:
-        gauge("Gaz (MQ2)", gaz_value, 0, 4095, suffix="ADC", seuil_rouge=3000)
+        gauge("Gaz MQ-2", gaz_value, 0, 4095, unit="ADC", seuil_rouge=3000)
     with g2:
-        gauge("Vitesse moteur", motor_speed, 0, 255, suffix="/255", seuil_rouge=200)
+        gauge("Vitesse moteur", motor_speed, 0, 255, unit="PWM", seuil_rouge=200)
 
-    st.markdown("### Graphes (Température / Humidité)")
+    st.markdown("<div class='section-title'>Évolution récente</div>", unsafe_allow_html=True)
     if df.empty or "date_local" not in df.columns:
         st.info("Pour les graphes, configure API_HISTORY (Secrets Streamlit).")
     else:
         p1, p2 = st.columns(2)
         with p1:
             if "temperature_lt" in df.columns:
-                st.plotly_chart(px.line(df, x="date_local", y="temperature_lt", title="Température"), use_container_width=True)
+                fig = px.line(df, x="date_local", y="temperature_lt", title="Température dans le temps")
+                style_plot(fig, "Date / heure", "Température (°C)")
+                st.plotly_chart(fig, use_container_width=True)
         with p2:
             if "humidite_lt" in df.columns:
-                st.plotly_chart(px.line(df, x="date_local", y="humidite_lt", title="Humidité"), use_container_width=True)
+                fig = px.line(df, x="date_local", y="humidite_lt", title="Humidité dans le temps")
+                style_plot(fig, "Date / heure", "Humidité (%)")
+                st.plotly_chart(fig, use_container_width=True)
 
 # Page: Commandes
 elif page == "Commandes":
-    st.subheader("Commandes - Salle technique")
-    st.info("Streamlit → POST Node-RED → MQTT → ESP32")
+    st.markdown("<div class='section-title'>Commandes</div>", unsafe_allow_html=True)
 
     if not API_CMD:
         st.error("Secret manquant: API_CMD (POST commande vers Node-RED).")
         st.stop()
 
-    vitesse = st.slider("Vitesse du moteur (0 à 255)", 0, 255, 120)
-    mute = st.checkbox("Mute alarme", value=False)
+    st.markdown("<div class='block'>", unsafe_allow_html=True)
+    st.markdown("<div class='small'>Streamlit envoie une commande à Node-RED, puis Node-RED publie via MQTT vers l'ESP32.</div>", unsafe_allow_html=True)
 
-    payload_send = {"target_speed": int(vitesse), "mute": 1 if mute else 0}
-    payload_stop = {"target_speed": 0, "mute": 1 if mute else 0}
+    cc1, cc2 = st.columns([2, 1])
+    with cc1:
+        vitesse = st.slider("Vitesse moteur (0 à 255)", 0, 255, 120)
+        mute = st.checkbox("Couper le buzzer (mute alarme)", value=False)
 
-    st.json(payload_send)
+    with cc2:
+        st.markdown("<div class='small'>Payload envoyé</div>", unsafe_allow_html=True)
+        payload_send = {"target_speed": int(vitesse), "mute": 1 if mute else 0}
+        payload_stop = {"target_speed": 0, "mute": 1 if mute else 0}
+        st.json(payload_send)
 
     b1, b2 = st.columns(2)
-
     with b1:
-        if st.button("Envoyer la commande", use_container_width=True):
+        if st.button("Envoyer la commande", type="primary", use_container_width=True):
             try:
                 r = requests.post(API_CMD, json=payload_send, timeout=10)
                 r.raise_for_status()
-                st.success("Commande envoyée !")
-                try:
-                    st.json(r.json())
-                except Exception:
-                    st.write(r.text)
+                st.success("Commande envoyée.")
             except Exception as e:
                 st.error(f"Erreur envoi commande : {e}")
 
@@ -245,52 +401,77 @@ elif page == "Commandes":
             try:
                 r = requests.post(API_CMD, json=payload_stop, timeout=10)
                 r.raise_for_status()
-                st.warning("Moteur arrêté !")
-                try:
-                    st.json(r.json())
-                except Exception:
-                    st.write(r.text)
+                st.warning("Commande stop envoyée.")
             except Exception as e:
                 st.error(f"Erreur arrêt moteur : {e}")
 
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.markdown("<div class='section-title'>Aperçu état actuel</div>", unsafe_allow_html=True)
+    s1, s2, s3, s4 = st.columns(4)
+    with s1:
+        kpi_card("Température", f"{temperature_lt} °C")
+    with s2:
+        kpi_card("Humidité", f"{humidite_lt} %")
+    with s3:
+        kpi_card("Gaz", f"{gaz_value} ADC")
+    with s4:
+        kpi_card("Vitesse", f"{motor_speed} /255")
+
 # Page: Historique
 elif page == "Historique":
-    st.subheader("Historique - mesures_hvac")
+    st.markdown("<div class='section-title'>Historique</div>", unsafe_allow_html=True)
 
     if df.empty:
         st.error("Aucun historique (API_HISTORY pas configurée ou pas de données).")
     else:
-        st.markdown(f"<div class='small-note'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
+        st.markdown("<div class='block'>", unsafe_allow_html=True)
+        st.markdown("<div class='small'>Ici je regarde les tendances sur une période plus longue et je peux trier le tableau.</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
         top1, top2, top3, top4 = st.columns(4)
         with top1:
-            kpi("Température (°C)", f"{temperature_lt}", "#2E86C1")
+            kpi_card("Température", f"{temperature_lt} °C")
         with top2:
-            kpi("Humidité (%)", f"{humidite_lt}", "#239B56")
+            kpi_card("Humidité", f"{humidite_lt} %")
         with top3:
-            kpi("Alarme", alarme_txt, "#C0392B" if alarme_txt == "ACTIF" else "#5D6D7E")
+            kpi_card("État alarme", alarme_txt)
         with top4:
-            kpi("Vitesse (0-255)", f"{motor_speed}", "#5D6D7E")
+            kpi_card("Vitesse moteur", f"{motor_speed} /255")
 
-        st.markdown("### Gauges (dernière mesure)")
-        gg1, gg2 = st.columns(2)
-        with gg1:
-            gauge("Gaz (MQ2)", gaz_value, 0, 4095, suffix="ADC", seuil_rouge=3000)
-        with gg2:
-            gauge("Vitesse moteur", motor_speed, 0, 255, suffix="/255", seuil_rouge=200)
+        st.markdown("<div class='section-title'>Courbes</div>", unsafe_allow_html=True)
 
-        st.markdown("### Graphes")
         if "date_local" in df.columns:
-            if "gaz" in df.columns:
-                st.plotly_chart(px.line(df, x="date_local", y="gaz", title="Évolution Gaz MQ2"), use_container_width=True)
-            if "motor_speed" in df.columns:
-                st.plotly_chart(px.line(df, x="date_local", y="motor_speed", title="Évolution vitesse moteur"), use_container_width=True)
+            if "temperature_lt" in df.columns:
+                fig = px.line(df, x="date_local", y="temperature_lt", title="Historique température")
+                style_plot(fig, "Date / heure", "Température (°C)")
+                st.plotly_chart(fig, use_container_width=True)
+
+            if "humidite_lt" in df.columns:
+                fig = px.line(df, x="date_local", y="humidite_lt", title="Historique humidité")
+                style_plot(fig, "Date / heure", "Humidité (%)")
+                st.plotly_chart(fig, use_container_width=True)
+
+            hh1, hh2 = st.columns(2)
+            with hh1:
+                if "gaz" in df.columns:
+                    fig = px.line(df, x="date_local", y="gaz", title="Historique gaz MQ-2")
+                    style_plot(fig, "Date / heure", "Gaz (ADC)")
+                    st.plotly_chart(fig, use_container_width=True)
+
+            with hh2:
+                if "motor_speed" in df.columns:
+                    fig = px.line(df, x="date_local", y="motor_speed", title="Historique vitesse moteur")
+                    style_plot(fig, "Date / heure", "Vitesse (0–255)")
+                    st.plotly_chart(fig, use_container_width=True)
+
             if "alarme" in df.columns:
-                fig_al = px.line(df, x="date_local", y="alarme", title="Historique alarme (0/1)")
+                fig_al = px.line(df, x="date_local", y="alarme", title="Historique alarme")
                 fig_al.update_traces(line_shape="hv")
+                style_plot(fig_al, "Date / heure", "Alarme (0 = off, 1 = on)")
                 st.plotly_chart(fig_al, use_container_width=True)
 
-        st.markdown("### Tableau")
+        st.markdown("<div class='section-title'>Tableau</div>", unsafe_allow_html=True)
         df_show = df.copy()
 
         if "date_local" in df_show.columns:
@@ -304,6 +485,6 @@ elif page == "Historique":
 
 # Footer
 st.markdown(
-    "<hr><p style='text-align:center; font-size:12px; color:#888;'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
+    "<hr><p style='text-align:center; font-size:12px; color:rgba(159,176,207,0.9);'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
     unsafe_allow_html=True
 )
