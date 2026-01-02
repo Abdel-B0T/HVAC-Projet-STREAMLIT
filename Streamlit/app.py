@@ -475,14 +475,28 @@ elif page == "Historique":
         st.markdown("<div class='section-title'>Tableau</div>", unsafe_allow_html=True)
 
         df_show = df.copy()
+        if "mode" in df_show.columns:
+          df_show["mode"] = df_show["mode"].str.upper()
+
         if "date_local" in df_show.columns:
             ascending = True if ordre_tableau == "Plus ancien → plus récent" else False
             df_show = df_show.sort_values(by="date_local", ascending=ascending)
             df_show["date_local"] = df_show["date_local"].dt.strftime("%d/%m/%Y %H:%M:%S")
 
-        cols = ["id", "date_local", "temperature_lt", "humidite_lt", "gaz", "motor_speed", "alarme"]
+        cols = [
+            "id",
+            "date_local",
+            "mode",
+            "temperature_lt",
+            "humidite_lt",
+            "gaz",
+            "motor_speed",
+            "alarme"
+        ]
+
         cols = [c for c in cols if c in df_show.columns]
         st.dataframe(df_show[cols], use_container_width=True)
+
 
 st.markdown(
     "<hr><p style='text-align:center; font-size:12px; color:rgba(183,198,230,0.9);'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
