@@ -7,12 +7,10 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="HVAC - Salle Technique", layout="wide")
 
-# Style sombre + corrections demandées
 st.markdown("""
 <style>
 :root{
   --bg:#0b1220;
-  --panel:#0f1b33;
   --card:#15253e;
   --text:#e8eefc;
   --muted:#b7c6e6;
@@ -72,11 +70,6 @@ html, body, [data-testid="stAppViewContainer"]{
   border-radius: 14px;
 }
 
-.small{
-  color: var(--muted);
-  font-size: 13px;
-}
-
 /* KPI */
 .kpi-card{
   background: var(--card);
@@ -115,31 +108,35 @@ button[kind="primary"]{
   font-weight: 800 !important;
 }
 
-/* Rendre visibles tous les labels (slider/checkbox) */
-label, .stMarkdown, .stText, p, span{
+/* IMPORTANT : forcer la couleur des labels (slider/checkbox/selectbox) */
+label, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] span{
+  color: var(--text) !important;
+}
+[data-testid="stWidgetLabel"]{
   color: var(--text) !important;
 }
 
-/* Inputs / select */
-[data-testid="stSidebar"] [data-baseweb="select"] > div{
+/* Selectbox : fond + flèche + texte */
+[data-baseweb="select"] > div{
   background: rgba(21,37,62,0.85) !important;
   border: 1px solid var(--line) !important;
 }
-
-/* Flèche de selectbox visible (celle que tu vois noire) */
 [data-baseweb="select"] svg{
   fill: rgba(232,238,252,0.95) !important;
 }
+[data-baseweb="select"] span{
+  color: rgba(232,238,252,0.95) !important;
+}
 
-/* JSON lisible */
-pre{
+/* JSON : éviter le fond blanc de st.json */
+[data-testid="stJson"]{
   background: rgba(7,18,34,0.85) !important;
-  color: var(--text) !important;
   border: 1px solid var(--line) !important;
   border-radius: 12px !important;
+  padding: 10px !important;
 }
-code{
-  color: var(--text) !important;
+[data-testid="stJson"] *{
+  color: rgba(232,238,252,0.95) !important;
 }
 
 /* Plotly transparent */
@@ -147,7 +144,6 @@ code{
   background: rgba(0,0,0,0) !important;
 }
 
-/* Séparateur */
 hr{
   border: none;
   border-top: 1px solid rgba(34,50,76,0.7);
@@ -208,7 +204,7 @@ def style_plot(fig, x_title: str, y_title: str, y_range=None):
             zerolinecolor="rgba(34,50,76,0.6)",
             range=y_range
         ),
-        margin=dict(l=40, r=20, t=55, b=40),
+        margin=dict(l=45, r=20, t=55, b=40),
         legend=dict(bgcolor="rgba(0,0,0,0)")
     )
     fig.update_traces(line_width=2)
@@ -299,7 +295,7 @@ except Exception as e:
 
 df = get_history()
 
-# Conversion dates (fix)
+# Conversion dates
 if not df.empty and "date" in df.columns:
     df["date_local"] = pd.to_datetime(df["date"], errors="coerce")
     if df["date_local"].dt.tz is None:
@@ -329,7 +325,7 @@ alarme_txt = "ACTIF" if alarme_int == 1 else "INACTIF"
 
 st.markdown(f"<div class='subhead'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
 
-# Page Vue générale
+# Vue générale
 if page == "Vue générale":
     st.markdown("<div class='section-title'>Vue générale</div>", unsafe_allow_html=True)
 
@@ -366,7 +362,7 @@ if page == "Vue générale":
                 style_plot(fig, "Date / heure", "Humidité (%)", y_range=[0, 100])
                 st.plotly_chart(fig, use_container_width=True)
 
-# Page Commandes
+# Commandes
 elif page == "Commandes":
     st.markdown("<div class='section-title'>Commandes</div>", unsafe_allow_html=True)
 
@@ -375,7 +371,6 @@ elif page == "Commandes":
         st.stop()
 
     st.markdown("<div class='block'>", unsafe_allow_html=True)
-    st.markdown("<div class='small'>Streamlit envoie une commande à Node-RED, puis Node-RED publie via MQTT vers l'ESP32.</div>", unsafe_allow_html=True)
 
     col_form, col_payload = st.columns([2, 1])
     with col_form:
@@ -386,7 +381,7 @@ elif page == "Commandes":
     payload_stop = {"target_speed": 0, "mute": 1 if mute else 0}
 
     with col_payload:
-        st.markdown("<div class='small'>Payload envoyé</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title' style='margin-top:0;'>Payload envoyé</div>", unsafe_allow_html=True)
         st.json(payload_send)
 
     b1, b2 = st.columns(2)
@@ -410,32 +405,16 @@ elif page == "Commandes":
 
     st.markdown("</div>", unsafe_allow_html=True)
 
-    st.markdown("<div class='section-title'>Aperçu état actuel</div>", unsafe_allow_html=True)
-    s1, s2, s3, s4 = st.columns(4)
-    with s1:
-        kpi_card("Température", f"{temperature_lt} °C")
-    with s2:
-        kpi_card("Humidité", f"{humidite_lt} %")
-    with s3:
-        kpi_card("Gaz", f"{gaz_value} ADC")
-    with s4:
-        kpi_card("Vitesse", f"{motor_speed} /255")
-
-# Page Historique
+# Historique
 elif page == "Historique":
     st.markdown("<div class='section-title'>Historique</div>", unsafe_allow_html=True)
 
     if df.empty:
         st.error("Aucun historique (API_HISTORY pas configurée ou pas de données).")
     else:
-        st.markdown("<div class='block'>", unsafe_allow_html=True)
-        st.markdown("<div class='small'>Ici je regarde les tendances et je peux trier le tableau.</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
-
-        st.markdown("<div class='section-title'>Courbes (échelle fixe)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-title'>Température / Humidité</div>", unsafe_allow_html=True)
 
         if "date_local" in df.columns:
-            # Température (0-40) et Humidité (0-100)
             c1, c2 = st.columns(2)
             with c1:
                 if "temperature_lt" in df.columns:
@@ -448,25 +427,19 @@ elif page == "Historique":
                     style_plot(fig, "Date / heure", "Humidité (%)", y_range=[0, 100])
                     st.plotly_chart(fig, use_container_width=True)
 
-            # Gaz et vitesse: autre idée -> mini stats + courbe normalisée
-            st.markdown("<div class='section-title'>Gaz et vitesse (lecture simple)</div>", unsafe_allow_html=True)
-
-            dfg = df.copy()
-            if "gaz" in dfg.columns:
-                dfg["gaz_pct"] = pd.to_numeric(dfg["gaz"], errors="coerce") / 4095 * 100
-            if "motor_speed" in dfg.columns:
-                dfg["motor_pct"] = pd.to_numeric(dfg["motor_speed"], errors="coerce") / 255 * 100
+            st.markdown("<div class='section-title'>Gaz / Vitesse moteur</div>", unsafe_allow_html=True)
 
             g1, g2 = st.columns(2)
             with g1:
-                if "gaz_pct" in dfg.columns:
-                    fig = px.line(dfg, x="date_local", y="gaz_pct", title="Gaz (en % de l'échelle)")
-                    style_plot(fig, "Date / heure", "Gaz (%)", y_range=[0, 100])
+                if "gaz" in df.columns:
+                    fig = px.line(df, x="date_local", y="gaz", title="Gaz MQ-2")
+                    style_plot(fig, "Date / heure", "Gaz (ADC)", y_range=[0, 4095])
                     st.plotly_chart(fig, use_container_width=True)
+
             with g2:
-                if "motor_pct" in dfg.columns:
-                    fig = px.line(dfg, x="date_local", y="motor_pct", title="Vitesse moteur (en %)")
-                    style_plot(fig, "Date / heure", "Vitesse (%)", y_range=[0, 100])
+                if "motor_speed" in df.columns:
+                    fig = px.line(df, x="date_local", y="motor_speed", title="Vitesse moteur")
+                    style_plot(fig, "Date / heure", "Vitesse (0–255)", y_range=[0, 255])
                     st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("<div class='section-title'>Tableau</div>", unsafe_allow_html=True)
@@ -481,7 +454,6 @@ elif page == "Historique":
         cols = [c for c in cols if c in df_show.columns]
         st.dataframe(df_show[cols], use_container_width=True)
 
-# Footer
 st.markdown(
     "<hr><p style='text-align:center; font-size:12px; color:rgba(183,198,230,0.9);'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
     unsafe_allow_html=True
