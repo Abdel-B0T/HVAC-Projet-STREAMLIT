@@ -70,12 +70,19 @@ html, body, [data-testid="stAppViewContainer"]{
   border-radius: 14px;
 }
 
-/* KPI */
+/* KPI (centré) */
 .kpi-card{
   background: var(--card);
   border: 1px solid var(--line);
   padding: 14px;
   border-radius: 14px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  min-height: 120px;
+  text-align: center;
 }
 .kpi-title{
   color: var(--muted);
@@ -108,7 +115,7 @@ button[kind="primary"]{
   font-weight: 800 !important;
 }
 
-/* IMPORTANT : forcer la couleur des labels (slider/checkbox/selectbox) */
+/* Labels visibles */
 label, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"] span{
   color: var(--text) !important;
 }
@@ -128,15 +135,17 @@ label, [data-testid="stMarkdownContainer"] p, [data-testid="stMarkdownContainer"
   color: rgba(232,238,252,0.95) !important;
 }
 
-/* JSON : éviter le fond blanc de st.json */
-[data-testid="stJson"]{
-  background: rgba(7,18,34,0.85) !important;
-  border: 1px solid var(--line) !important;
-  border-radius: 12px !important;
-  padding: 10px !important;
-}
-[data-testid="stJson"] *{
-  color: rgba(232,238,252,0.95) !important;
+/* Payload : on remplace st.json par un bloc code stylé */
+.payload{
+  background: rgba(7,18,34,0.85);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: rgba(232,238,252,0.95);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 14px;
+  white-space: pre;
+  overflow-x: auto;
 }
 
 /* Plotly transparent */
@@ -239,6 +248,16 @@ def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None, bar_color="rgba(9
         height=300
     )
     st.plotly_chart(fig, use_container_width=True)
+
+def payload_box(d: dict):
+    txt = "{\n"
+    for k, v in d.items():
+        if isinstance(v, str):
+            txt += f'  "{k}": "{v}"\n'
+        else:
+            txt += f'  "{k}": {v}\n'
+    txt += "}"
+    st.markdown(f"<div class='payload'>{txt}</div>", unsafe_allow_html=True)
 
 # Sidebar
 page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique"])
@@ -382,7 +401,7 @@ elif page == "Commandes":
 
     with col_payload:
         st.markdown("<div class='section-title' style='margin-top:0;'>Payload envoyé</div>", unsafe_allow_html=True)
-        st.json(payload_send)
+        payload_box(payload_send)
 
     b1, b2 = st.columns(2)
     with b1:
@@ -455,6 +474,6 @@ elif page == "Historique":
         st.dataframe(df_show[cols], use_container_width=True)
 
 st.markdown(
-    "<hr><p style='text-align:center; font-size:12px; color:rgba(183,198,230,0.9);'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
+    "<hr><p style='text-align:center; font-size:12px; color:rgba(183,198,230,0.9);'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE304531]</p>",
     unsafe_allow_html=True
 )
