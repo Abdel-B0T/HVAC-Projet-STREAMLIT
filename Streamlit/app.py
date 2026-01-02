@@ -7,7 +7,6 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="HVAC - Salle Technique", layout="wide")
 
-# Style sombre, lisible partout
 st.markdown("""
 <style>
 :root{
@@ -21,13 +20,11 @@ st.markdown("""
   --danger:#ef4444;
 }
 
-/* Fond */
 html, body, [data-testid="stAppViewContainer"]{
   background: var(--bg);
   color: var(--text);
 }
 
-/* Sidebar */
 [data-testid="stSidebar"]{
   background: #081327;
   border-right: 1px solid var(--line);
@@ -36,7 +33,6 @@ html, body, [data-testid="stAppViewContainer"]{
   color: var(--text) !important;
 }
 
-/* Header */
 .header{
   background: linear-gradient(135deg, #0f1b33, #0b1220);
   border: 1px solid var(--line);
@@ -52,7 +48,6 @@ html, body, [data-testid="stAppViewContainer"]{
   color: var(--text);
 }
 
-/* Texte secondaire */
 .note{
   color: var(--muted);
   font-size: 13px;
@@ -60,7 +55,6 @@ html, body, [data-testid="stAppViewContainer"]{
   margin-bottom: 12px;
 }
 
-/* Titres sections */
 .section-title{
   color: var(--text);
   font-size: 18px;
@@ -68,7 +62,6 @@ html, body, [data-testid="stAppViewContainer"]{
   margin: 12px 0 8px 0;
 }
 
-/* KPI */
 .kpi-card{
   background: rgba(21,37,62,0.92);
   border: 1px solid var(--line);
@@ -94,7 +87,6 @@ html, body, [data-testid="stAppViewContainer"]{
   margin: 0;
 }
 
-/* Selectbox */
 [data-baseweb="select"] > div{
   background: rgba(21,37,62,0.85) !important;
   border: 1px solid var(--line) !important;
@@ -116,12 +108,10 @@ html, body, [data-testid="stAppViewContainer"]{
   box-shadow: 0 0 0 2px rgba(96,165,250,0.15) !important;
 }
 
-/* Labels widgets */
 label, [data-testid="stWidgetLabel"]{
   color: rgba(232,238,252,0.95) !important;
 }
 
-/* Boutons */
 [data-testid="stButton"] button{
   border-radius: 12px;
   border: 1px solid var(--line) !important;
@@ -135,7 +125,6 @@ label, [data-testid="stWidgetLabel"]{
   border: 1px solid rgba(96,165,250,0.65) !important;
 }
 
-/* Payload (pour remplacer st.json) */
 .payload{
   background: rgba(7,18,34,0.9);
   border: 1px solid var(--line);
@@ -148,7 +137,6 @@ label, [data-testid="stWidgetLabel"]{
   overflow-x: auto;
 }
 
-/* Tableau */
 [data-testid="stDataFrame"]{
   background: rgba(21,37,62,0.55);
   border: 1px solid var(--line);
@@ -156,12 +144,10 @@ label, [data-testid="stWidgetLabel"]{
   padding: 8px;
 }
 
-/* Plotly fond transparent */
 .js-plotly-plot .plotly, .js-plotly-plot .plotly div{
   background: rgba(0,0,0,0) !important;
 }
 
-/* Séparateur propre */
 hr{
   border: none;
   border-top: 1px solid rgba(34,50,76,0.7);
@@ -178,9 +164,15 @@ def safe_int(x, default=0):
     except Exception:
         return default
 
-def safe_float(x, default=0.0):
+# Je convertis en float proprement, et si c'est vide/— je renvoie None
+def safe_float(x, default=None):
     try:
-        return float(x)
+        if x is None:
+            return default
+        s = str(x).strip()
+        if s == "" or s == "—" or s.lower() == "nan":
+            return default
+        return float(s)
     except Exception:
         return default
 
@@ -237,8 +229,10 @@ def style_plot(fig, x_title: str, y_title: str, y_range=None):
     )
     fig.update_traces(line_width=2)
 
+# Jauge: si la valeur est invalide, j'affiche juste — (pas "0 0-255")
 def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None, bar_color="rgba(96,165,250,0.85)"):
-    val = safe_float(value, 0.0)
+    val = safe_float(value, default=None)
+    display_val = 0.0 if val is None else float(val)
 
     steps = None
     if seuil_rouge is not None:
@@ -249,9 +243,13 @@ def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None, bar_color="rgba(9
 
     fig = go.Figure(go.Indicator(
         mode="gauge+number",
-        value=val,
+        value=display_val,
         title={"text": title, "font": {"size": 16, "color": "rgba(232,238,252,0.95)"}},
-        number={"suffix": f" {unit}" if unit else "", "font": {"size": 44, "color": "rgba(232,238,252,0.95)"}},
+        number={
+            "suffix": f" {unit}" if unit else "",
+            "font": {"size": 44, "color": "rgba(232,238,252,0.95)"},
+            "valueformat": ".0f" if val is not None else ""
+        },
         gauge={
             "axis": {"range": [vmin, vmax], "tickcolor": "rgba(183,198,230,0.9)"},
             "bar": {"color": bar_color},
@@ -260,12 +258,18 @@ def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None, bar_color="rgba(9
             "steps": steps
         }
     ))
+
     fig.update_layout(
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=70, b=10),
         height=300
     )
+
+    # Si invalide, j'écrase l'affichage de la valeur par un —
+    if val is None:
+        fig.update_traces(number={"prefix": "—", "suffix": ""})
+
     st.plotly_chart(fig, use_container_width=True)
 
 # Sidebar
@@ -314,7 +318,6 @@ def get_history():
     r.raise_for_status()
     return pd.DataFrame(r.json())
 
-# Data
 try:
     last = get_latest()
 except Exception as e:
@@ -372,7 +375,7 @@ if page == "Vue générale":
     with g1:
         gauge("Gaz MQ-2", gaz_value, 0, 4095, unit="ADC", seuil_rouge=3000, bar_color="rgba(245,158,11,0.80)")
     with g2:
-        gauge("Vitesse moteur", motor_speed, 0, 255, unit="0-255", seuil_rouge=200, bar_color="rgba(34,197,94,0.75)")
+        gauge("Vitesse moteur", motor_speed, 0, 255, unit="PWM", seuil_rouge=200, bar_color="rgba(34,197,94,0.75)")
 
     st.markdown("<div class='section-title'>Graphes (température / humidité)</div>", unsafe_allow_html=True)
 
@@ -481,7 +484,6 @@ elif page == "Historique":
         cols = [c for c in cols if c in df_show.columns]
         st.dataframe(df_show[cols], use_container_width=True)
 
-# Footer
 st.markdown(
     "<hr><p style='text-align:center; font-size:12px; color:rgba(183,198,230,0.9);'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
     unsafe_allow_html=True
