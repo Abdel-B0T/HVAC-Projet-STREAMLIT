@@ -1,3 +1,5 @@
+# Code app.py pour géré streamlit LFRAH & IQBAL
+
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -266,14 +268,12 @@ def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None, bar_color="rgba(9
         height=300
     )
 
-    # Si invalide, j'écrase l'affichage de la valeur par un —
     if val is None:
         fig.update_traces(number={"prefix": "—", "suffix": ""})
 
     st.plotly_chart(fig, use_container_width=True)
 
-# Sidebar
-page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique"])
+page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique", "Gestion Salle"])
 
 refresh_seconds = st.sidebar.slider(
     "Temps de rafraîchissement (secondes)",
@@ -295,10 +295,10 @@ if page == "Historique":
         index=0
     )
 
-# Secrets
 API_LATEST = st.secrets.get("API_LATEST", "").strip()
 API_HISTORY = st.secrets.get("API_HISTORY", "").strip()
 API_CMD = st.secrets.get("API_CMD", "").strip()
+API_SALLE_CMD = st.secrets.get("API_SALLE_CMD", "").strip()
 
 if not API_LATEST:
     st.error("Secret manquant: API_LATEST (GET dernière mesure).")
@@ -326,7 +326,6 @@ except Exception as e:
 
 df = get_history()
 
-# Dates historique propre
 if not df.empty and "date" in df.columns:
     df["date_local"] = pd.to_datetime(df["date"], errors="coerce")
 
@@ -335,7 +334,6 @@ if not df.empty and "date" in df.columns:
     else:
         df["date_local"] = df["date_local"].dt.tz_convert("Europe/Brussels")
 
-# Valeurs latest
 temperature_lt = last.get("temperature_lt", "—")
 humidite_lt = last.get("humidite_lt", "—")
 gaz_value = last.get("gaz", "—")
@@ -346,7 +344,6 @@ date_value = last.get("date", None)
 alarme_int = safe_int(alarme_value, 0)
 alarme_txt = "ACTIF" if alarme_int == 1 else "INACTIF"
 
-# Mode : on accepte "mode" ou "mode_confort"
 mode_txt = "—"
 if "mode" in last and str(last.get("mode", "")).strip() != "":
     mode_txt = str(last.get("mode")).upper()
@@ -355,7 +352,6 @@ elif "mode_confort" in last:
 
 st.markdown(f"<div class='note'>Dernière mesure : <b>{fmt_date(date_value)}</b></div>", unsafe_allow_html=True)
 
-# Vue générale
 if page == "Vue générale":
     st.markdown("<div class='section-title'>Vue générale</div>", unsafe_allow_html=True)
 
@@ -395,7 +391,6 @@ if page == "Vue générale":
                 style_plot(fig, "Date / heure", "Humidité (%)", y_range=[0, 100])
                 st.plotly_chart(fig, use_container_width=True)
 
-# Commandes
 elif page == "Commandes":
     st.markdown("<div class='section-title'>Commandes</div>", unsafe_allow_html=True)
 
@@ -442,7 +437,6 @@ elif page == "Commandes":
     with a4:
         kpi_card("Vitesse", f"{motor_speed} /255")
 
-# Historique
 elif page == "Historique":
     st.markdown("<div class='section-title'>Historique - mesures_hvac</div>", unsafe_allow_html=True)
 
@@ -476,7 +470,7 @@ elif page == "Historique":
 
         df_show = df.copy()
         if "mode" in df_show.columns:
-          df_show["mode"] = df_show["mode"].str.upper()
+            df_show["mode"] = df_show["mode"].str.upper()
 
         if "date_local" in df_show.columns:
             ascending = True if ordre_tableau == "Plus ancien → plus récent" else False
@@ -497,6 +491,137 @@ elif page == "Historique":
         cols = [c for c in cols if c in df_show.columns]
         st.dataframe(df_show[cols], use_container_width=True)
 
+elif page == "Gestion Salle":
+    st.markdown("<div class='section-title'>Gestion de commande de la Salle</div>", unsafe_allow_html=True)
+
+    if not API_SALLE_CMD:
+        st.error("Secret manquant: API_SALLE_CMD (POST commande Salle vers Node-RED).")
+        st.stop()
+
+    # Je récupère les valeurs actuelles si elles existent, sinon je mets des valeurs par défaut
+    def get_val(d, key, default):
+        try:
+            v = d.get(key, default)
+            if v in ["", "—", None]:
+                return default
+            return v
+        except Exception:
+            return default
+
+    lamp_mode_current = str(get_val(last, "lampMode", "auto")).lower()
+    brightness_current = safe_int(get_val(last, "brightness", 30), 30)
+
+    tempT1_cur = float(get_val(last, "tempT1", 18.0))
+    tempT2_cur = float(get_val(last, "tempT2", 24.0))
+    tempT3_cur = float(get_val(last, "tempT3", 28.0))
+
+    humH1_cur = float(get_val(last, "humH1", 40.0))
+    humH2_cur = float(get_val(last, "humH2", 70.0))
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("<div class='section-title'>Lampe et luminosité</div>", unsafe_allow_html=True)
+
+        lamp_choice = st.selectbox(
+            "Mode lampe",
+            ["Auto", "ON", "OFF"],
+            index=0 if lamp_mode_current == "auto" else 1 if lamp_mode_current == "on" else 2
+        )
+
+        brightness = st.slider("Luminosité des bandeaux (%)", 0, 100, brightness_current, 1)
+
+        # Petite preview, ça représente juste l'intensité
+        alpha = max(0.10, brightness / 100)
+        size = 110
+        glow = 6 + int(brightness * 0.4)
+
+        st.markdown(
+            f"""
+            <div class="kpi-card" style="min-height:180px;">
+                <div class="kpi-title">Aperçu luminosité</div>
+                <div style="
+                    width:{size}px;
+                    height:{size}px;
+                    border-radius:50%;
+                    background: rgba(255,255,255,{alpha});
+                    box-shadow: 0 0 {glow}px rgba(255,255,255,{alpha});
+                    border: 1px solid rgba(34,50,76,0.8);
+                "></div>
+                <div style="margin-top:10px;font-weight:700;">
+                    {brightness} %
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+
+    with col2:
+        st.markdown("<div class='section-title'>Seuils de fonctionnement</div>", unsafe_allow_html=True)
+
+        st.markdown("<div class='note'>Température (T1 < T2 < T3)</div>", unsafe_allow_html=True)
+        t1 = st.number_input("T1 (°C)", 0.0, 60.0, tempT1_cur, 0.5)
+        t2 = st.number_input("T2 (°C)", 0.0, 60.0, tempT2_cur, 0.5)
+        t3 = st.number_input("T3 (°C)", 0.0, 60.0, tempT3_cur, 0.5)
+
+        st.markdown("<div class='note'>Humidité (H1 < H2)</div>", unsafe_allow_html=True)
+        h1 = st.number_input("H1 (%)", 0.0, 100.0, humH1_cur, 1.0)
+        h2 = st.number_input("H2 (%)", 0.0, 100.0, humH2_cur, 1.0)
+
+    lamp_mode_send = "auto"
+    if lamp_choice == "ON":
+        lamp_mode_send = "on"
+    elif lamp_choice == "OFF":
+        lamp_mode_send = "off"
+
+    payload_salle = {
+        "lampMode": lamp_mode_send,
+        "brightness": int(brightness),
+        "tempT1": float(t1),
+        "tempT2": float(t2),
+        "tempT3": float(t3),
+        "humH1": float(h1),
+        "humH2": float(h2)
+    }
+
+    st.markdown("<div class='section-title'>Payload envoyé</div>", unsafe_allow_html=True)
+    payload_box(payload_salle)
+
+    erreur = False
+    if not (t1 < t2 < t3):
+        st.error("Les seuils température doivent respecter T1 < T2 < T3")
+        erreur = True
+    if not (h1 < h2):
+        st.error("Les seuils humidité doivent respecter H1 < H2")
+        erreur = True
+
+    b1, b2 = st.columns(2)
+    with b1:
+        if st.button("Envoyer vers la Salle", use_container_width=True, disabled=erreur):
+            try:
+                r = requests.post(API_SALLE_CMD, json=payload_salle, timeout=10)
+                r.raise_for_status()
+                st.success("Commande envoyée à la Salle")
+            except Exception as e:
+                st.error(f"Erreur d’envoi : {e}")
+
+    with b2:
+        if st.button("Réglages par défaut", use_container_width=True):
+            payload_default = {
+                "lampMode": "auto",
+                "brightness": 30,
+                "tempT1": 18.0,
+                "tempT2": 24.0,
+                "tempT3": 28.0,
+                "humH1": 40.0,
+                "humH2": 70.0
+            }
+            try:
+                r = requests.post(API_SALLE_CMD, json=payload_default, timeout=10)
+                r.raise_for_status()
+                st.warning("Valeurs par défaut envoyées")
+            except Exception as e:
+                st.error(f"Erreur reset : {e}")
 
 st.markdown(
     "<hr><p style='text-align:center; font-size:12px; color:rgba(183,198,230,0.9);'>© 2025 - Binôme A_02 : LFRAH Abdelrahman [HE304830] – IQBAL Adil [HE305031]</p>",
