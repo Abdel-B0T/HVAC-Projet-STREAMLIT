@@ -409,7 +409,7 @@ if page == "Vue générale":
                 style_plot(fig, "Date / heure", "Humidité (%)", y_range=[0, 100])
                 st.plotly_chart(fig, use_container_width=True)
 
-elif page == "Commandes":
+elif page == "Commandes Salle technique":
     st.markdown("<div class='section-title'>Commandes</div>", unsafe_allow_html=True)
 
     if not API_CMD:
@@ -500,7 +500,7 @@ elif page == "Historique":
         cols = [c for c in cols if c in df_show.columns]
         st.dataframe(df_show[cols], use_container_width=True)
 
-elif page == "Gestion Salle":
+elif page == "Commandes Salle":
     st.markdown("<div class='section-title'>Gestion de commande de la Salle</div>", unsafe_allow_html=True)
 
     if not API_SALLE_CMD:
