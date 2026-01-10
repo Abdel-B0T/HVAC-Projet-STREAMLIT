@@ -7,8 +7,10 @@ import plotly.graph_objects as go
 import requests
 from streamlit_autorefresh import st_autorefresh
 
+# On configure la page (titre + layout large)
 st.set_page_config(page_title="HVAC - Salle Technique", layout="wide")
 
+# On met toute la DA en CSS (couleurs, cards, boutons, selectbox, etc.)
 st.markdown("""
 <style>
 :root{
@@ -110,6 +112,21 @@ html, body, [data-testid="stAppViewContainer"]{
   box-shadow: 0 0 0 2px rgba(96,165,250,0.15) !important;
 }
 
+/* Fix: texte du menu déroulant (options) en blanc */
+[data-baseweb="select"] *{
+  color: rgba(232,238,252,0.95) !important;
+}
+[data-baseweb="menu"] *{
+  color: rgba(232,238,252,0.95) !important;
+}
+[data-baseweb="menu"] div[role="option"]:hover{
+  background-color: rgba(96,165,250,0.25) !important;
+}
+[data-baseweb="menu"] div[aria-selected="true"]{
+  background-color: rgba(96,165,250,0.35) !important;
+  color: white !important;
+}
+
 label, [data-testid="stWidgetLabel"]{
   color: rgba(232,238,252,0.95) !important;
 }
@@ -166,7 +183,6 @@ def safe_int(x, default=0):
     except Exception:
         return default
 
-# Je convertis en float proprement, et si c'est vide/— je renvoie None
 def safe_float(x, default=None):
     try:
         if x is None:
@@ -231,7 +247,6 @@ def style_plot(fig, x_title: str, y_title: str, y_range=None):
     )
     fig.update_traces(line_width=2)
 
-# Jauge: si la valeur est invalide, j'affiche juste — (pas "0 0-255")
 def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None, bar_color="rgba(96,165,250,0.85)"):
     val = safe_float(value, default=None)
     display_val = 0.0 if val is None else float(val)
@@ -273,12 +288,11 @@ def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None, bar_color="rgba(9
 
     st.plotly_chart(fig, use_container_width=True)
 
+# On choisit la page dans la sidebar
 page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique", "Gestion Salle"])
 
-refresh_seconds = st.sidebar.slider(
-    "Temps de rafraîchissement (secondes)",
-    min_value=2, max_value=15, value=5, step=1
-)
+# On règle le refresh automatique
+refresh_seconds = st.sidebar.slider("Temps de rafraîchissement (secondes)", 2, 15, 5, 1)
 
 if page == "Vue générale":
     st_autorefresh(interval=refresh_seconds * 1000, key="auto_refresh_vg")
@@ -295,6 +309,7 @@ if page == "Historique":
         index=0
     )
 
+# On récupère les liens API depuis les secrets Streamlit
 API_LATEST = st.secrets.get("API_LATEST", "").strip()
 API_HISTORY = st.secrets.get("API_HISTORY", "").strip()
 API_CMD = st.secrets.get("API_CMD", "").strip()
@@ -318,6 +333,7 @@ def get_history():
     r.raise_for_status()
     return pd.DataFrame(r.json())
 
+# On récupère la dernière mesure et l'historique si dispo
 try:
     last = get_latest()
 except Exception as e:
@@ -326,14 +342,15 @@ except Exception as e:
 
 df = get_history()
 
+# On nettoie les dates de l'historique pour avoir la bonne timezone
 if not df.empty and "date" in df.columns:
     df["date_local"] = pd.to_datetime(df["date"], errors="coerce")
-
     if df["date_local"].dt.tz is None:
         df["date_local"] = df["date_local"].dt.tz_localize("Europe/Brussels", ambiguous="infer", nonexistent="shift_forward")
     else:
         df["date_local"] = df["date_local"].dt.tz_convert("Europe/Brussels")
 
+# On lit les dernières valeurs
 temperature_lt = last.get("temperature_lt", "—")
 humidite_lt = last.get("humidite_lt", "—")
 gaz_value = last.get("gaz", "—")
@@ -344,6 +361,7 @@ date_value = last.get("date", None)
 alarme_int = safe_int(alarme_value, 0)
 alarme_txt = "ACTIF" if alarme_int == 1 else "INACTIF"
 
+# On calcule le mode affiché (mode texte ou mode_confort)
 mode_txt = "—"
 if "mode" in last and str(last.get("mode", "")).strip() != "":
     mode_txt = str(last.get("mode")).upper()
@@ -398,6 +416,7 @@ elif page == "Commandes":
         st.error("Secret manquant: API_CMD (POST commande vers Node-RED).")
         st.stop()
 
+    # On gère le moteur et le mute alarme
     vitesse = st.slider("Vitesse moteur (0 à 255)", 0, 255, 120)
     mute = st.checkbox("Couper le buzzer (mute alarme)", value=False)
 
@@ -477,17 +496,7 @@ elif page == "Historique":
             df_show = df_show.sort_values(by="date_local", ascending=ascending)
             df_show["date_local"] = df_show["date_local"].dt.strftime("%d/%m/%Y %H:%M:%S")
 
-        cols = [
-            "id",
-            "date_local",
-            "mode",
-            "temperature_lt",
-            "humidite_lt",
-            "gaz",
-            "motor_speed",
-            "alarme"
-        ]
-
+        cols = ["id", "date_local", "mode", "temperature_lt", "humidite_lt", "gaz", "motor_speed", "alarme"]
         cols = [c for c in cols if c in df_show.columns]
         st.dataframe(df_show[cols], use_container_width=True)
 
@@ -498,7 +507,7 @@ elif page == "Gestion Salle":
         st.error("Secret manquant: API_SALLE_CMD (POST commande Salle vers Node-RED).")
         st.stop()
 
-    # Je récupère les valeurs actuelles si elles existent, sinon je mets des valeurs par défaut
+    # Petite fonction pour récupérer une valeur actuelle ou mettre un défaut
     def get_val(d, key, default):
         try:
             v = d.get(key, default)
@@ -531,7 +540,7 @@ elif page == "Gestion Salle":
 
         brightness = st.slider("Luminosité des bandeaux (%)", 0, 100, brightness_current, 1)
 
-        # Petite preview, ça représente juste l'intensité
+        # Preview simple: cercle blanc avec intensité selon le slider
         alpha = max(0.10, brightness / 100)
         size = 110
         glow = 6 + int(brightness * 0.4)
@@ -559,12 +568,12 @@ elif page == "Gestion Salle":
     with col2:
         st.markdown("<div class='section-title'>Seuils de fonctionnement</div>", unsafe_allow_html=True)
 
-        st.markdown("<div class='note'>Température (T1 < T2 < T3)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='note'>Température (T1 &lt; T2 &lt; T3)</div>", unsafe_allow_html=True)
         t1 = st.number_input("T1 (°C)", 0.0, 60.0, tempT1_cur, 0.5)
         t2 = st.number_input("T2 (°C)", 0.0, 60.0, tempT2_cur, 0.5)
         t3 = st.number_input("T3 (°C)", 0.0, 60.0, tempT3_cur, 0.5)
 
-        st.markdown("<div class='note'>Humidité (H1 < H2)</div>", unsafe_allow_html=True)
+        st.markdown("<div class='note'>Humidité (H1 &lt; H2)</div>", unsafe_allow_html=True)
         h1 = st.number_input("H1 (%)", 0.0, 100.0, humH1_cur, 1.0)
         h2 = st.number_input("H2 (%)", 0.0, 100.0, humH2_cur, 1.0)
 
