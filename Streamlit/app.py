@@ -289,7 +289,7 @@ def gauge(title, value, vmin, vmax, unit="", seuil_rouge=None, bar_color="rgba(9
     st.plotly_chart(fig, use_container_width=True)
 
 # On choisit la page dans la sidebar
-page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes", "Historique", "Gestion Salle"])
+page = st.sidebar.selectbox("Choisir une page", ["Vue générale", "Commandes Salle technique", "Commandes Salle", "Historique"])
 
 # On règle le refresh automatique
 refresh_seconds = st.sidebar.slider("Temps de rafraîchissement (secondes)", 2, 15, 5, 1)
